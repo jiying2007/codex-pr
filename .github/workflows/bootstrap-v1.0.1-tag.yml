@@ -1,0 +1,64 @@
+name: Bootstrap clean v1.0.1 tag
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release-v1.0.1-trigger' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Verify immutable clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha='1d2167fd53f38372090795579bd77a23ba3ab41b'
+          git cat-file -e "${source_sha}^{commit}"
+          git merge-base --is-ancestor "$source_sha" HEAD
+          version=$(git show "${source_sha}:package.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(JSON.parse(s).version))")
+          test "$version" = '1.0.1'
+          lock_version=$(git show "${source_sha}:package-lock.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);process.stdout.write(j.version+'|'+j.packages[''].version)})")
+          test "$lock_version" = '1.0.1|1.0.1'
+          mapfile -t workflows < <(git ls-tree --name-only "${source_sha}:.github/workflows" | sort)
+          expected=(ci.yml release.yml)
+          test "${workflows[*]}" = "${expected[*]}"
+          if git ls-remote --exit-code --tags origin refs/tags/v1.0.1 >/dev/null 2>&1; then
+            echo 'v1.0.1 already exists' >&2
+            exit 1
+          fi
+      - name: Create tag on clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha='1d2167fd53f38372090795579bd77a23ba3ab41b'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a v1.0.1 "$source_sha" -m 'Codex PR Safe 1.0.1'
+          git push origin refs/tags/v1.0.1
+      - name: Remove one-time bootstrap from main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+          rm -f .github/workflows/bootstrap-v1.0.1-tag.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/bootstrap-v1.0.1-tag.yml
+          git commit -m 'chore: remove v1.0.1 tag bootstrap'
+          git push origin HEAD:main
+      - name: Remove temporary branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin --delete maintenance-1.0.1 || true
+          git push origin --delete release-v1.0.1-trigger || true
