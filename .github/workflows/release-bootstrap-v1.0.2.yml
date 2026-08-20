@@ -1,0 +1,243 @@
+name: Publish Codex PR Safe v1.0.2
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: 56806fd77ad1f199faf2b0525e3093abf8270ec1
+  VERSION: 1.0.2
+  TAG: v1.0.2
+
+jobs:
+  validate:
+    name: Validate clean release source
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'release-v1.0.2-trigger' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify immutable source and release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(node -p "require('./package.json').version")" = "$VERSION"
+          test "$(node -p "require('./package-lock.json').version")" = "$VERSION"
+          test "$(node -p "require('./package-lock.json').packages[''].version")" = "$VERSION"
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main
+          mapfile -t workflows < <(find .github/workflows -maxdepth 1 -type f -printf '%f\n' | sort)
+          expected=(ci.yml release.yml)
+          test "${workflows[*]}" = "${expected[*]}"
+          if find . -maxdepth 1 -type f \( -name '.bootstrap-*' -o -name '.finalize-*' \) -print -quit | grep -q .; then
+            echo 'temporary release marker present in source tree' >&2
+            exit 1
+          fi
+          test -z "$(git ls-remote --tags origin "refs/tags/$TAG")"
+      - run: npm run verify:lock
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check
+
+  integration-latest:
+    name: Extension Host / ${{ matrix.os }} / latest
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Ensure Linux Extension Host dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v xvfb-run >/dev/null 2>&1 && ldconfig -p | grep -q 'libgtk-3.so' && ldconfig -p | grep -q 'libnss3.so'; then
+            echo 'Extension Host dependencies already available.'
+          else
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2
+          fi
+      - name: Run Extension Host integration tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a npm run test:integration
+      - name: Run Extension Host integration tests
+        if: runner.os != 'Linux'
+        run: npm run test:integration
+
+  integration-minimum:
+    name: Extension Host / Ubuntu / VS Code 1.90.0
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      VSCODE_TEST_VERSION: '1.90.0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Ensure Linux Extension Host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v xvfb-run >/dev/null 2>&1 && ldconfig -p | grep -q 'libgtk-3.so' && ldconfig -p | grep -q 'libnss3.so'; then
+            echo 'Extension Host dependencies already available.'
+          else
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2
+          fi
+      - run: xvfb-run -a npm run test:integration
+
+  integration-zh-cn:
+    name: Extension Host / Ubuntu / zh-CN localization
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      CODEX_PR_IT_ZH_SMOKE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Ensure Linux Extension Host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v xvfb-run >/dev/null 2>&1 && ldconfig -p | grep -q 'libgtk-3.so' && ldconfig -p | grep -q 'libnss3.so'; then
+            echo 'Extension Host dependencies already available.'
+          else
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2
+          fi
+      - run: xvfb-run -a npm run test:integration
+
+  release:
+    name: Tag, package, checksum and publish
+    needs: [validate, integration-latest, integration-minimum, integration-zh-cn]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run package
+      - name: Verify package and create checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          vsix="codex-pr-safe-${VERSION}.vsix"
+          unzip -Z1 "$vsix" > /tmp/vsix-files.txt
+          grep -Fx 'extension/package.nls.json' /tmp/vsix-files.txt
+          grep -Fx 'extension/package.nls.zh-cn.json' /tmp/vsix-files.txt
+          grep -Fx 'extension/l10n/bundle.l10n.json' /tmp/vsix-files.txt
+          grep -Fx 'extension/l10n/bundle.l10n.zh-cn.json' /tmp/vsix-files.txt
+          grep -Fx 'extension/README.zh-CN.md' /tmp/vsix-files.txt
+          grep -Fx 'extension/images/icon.png' /tmp/vsix-files.txt
+          grep -Fx 'extension/src/core.js' /tmp/vsix-files.txt
+          if grep -E '^extension/(test|scripts|package-lock\.json|SECURITY\.md|PUBLISHING\.md|\.gitignore|\.gitattributes|\.github|\.vscode|\.codex-pr\.example\.json)' /tmp/vsix-files.txt; then
+            echo 'VSIX contains development-only files' >&2
+            exit 1
+          fi
+          sha256sum "$vsix" > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Create immutable release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git ls-remote --tags origin "refs/tags/$TAG")"
+          git tag "$TAG" "$SOURCE_SHA"
+          git push origin "refs/tags/$TAG"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: codex-pr-safe-${{ env.VERSION }}
+          path: |
+            codex-pr-safe-${{ env.VERSION }}.vsix
+            SHA256SUMS
+          if-no-files-found: error
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            "codex-pr-safe-${VERSION}.vsix" \
+            SHA256SUMS \
+            --title "Codex PR Safe ${VERSION}" \
+            --generate-notes \
+            --verify-tag
+      - name: Verify published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/release-check
+          cd /tmp/release-check
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "codex-pr-safe-${VERSION}.vsix" --pattern SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+  cleanup:
+    name: Remove one-time publication machinery
+    needs: release
+    if: ${{ success() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: true
+          fetch-depth: 0
+      - name: Self-remove workflow and temporary branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/release-bootstrap-v1.0.2.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/release-bootstrap-v1.0.2.yml
+          git commit -m 'chore: remove v1.0.2 release bootstrap'
+          git push origin HEAD:main
+          git push origin --delete release-v1.0.2-trigger || true
+          git push origin --delete consistency-1.0.2 || true
