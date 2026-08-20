@@ -15,14 +15,20 @@ function createWorkspace() {
   run('git', ['init', '-b', 'main'], root);
   run('git', ['config', 'user.email', 'codex-pr-safe@example.invalid'], root);
   run('git', ['config', 'user.name', 'Codex PR Safe Test'], root);
+  fs.mkdirSync(path.join(root, '.github'));
   fs.writeFileSync(path.join(root, 'app.js'), 'module.exports = 1;\n');
-  run('git', ['add', 'app.js'], root);
+  fs.writeFileSync(path.join(root, '.codex-pr.json'), '{"language":"en"}\n');
+  fs.writeFileSync(path.join(root, '.github', 'pull_request_template.md'), 'COMMITTED TEMPLATE MARKER\n');
+  run('git', ['add', 'app.js', '.codex-pr.json', '.github/pull_request_template.md'], root);
   run('git', ['commit', '-m', 'chore: initial'], root);
   run('git', ['checkout', '-b', 'feature/pr-safe'], root);
   fs.writeFileSync(path.join(root, 'app.js'), 'module.exports = 2;\n');
   fs.writeFileSync(path.join(root, 'feature.js'), 'module.exports = "safe";\n');
   run('git', ['add', 'app.js', 'feature.js'], root);
   run('git', ['commit', '-m', 'feat: add safe PR generation'], root);
+
+  fs.writeFileSync(path.join(root, '.codex-pr.json'), '{"language":"zh-CN","extraInstructions":"UNCOMMITTED CONFIG INJECTION"}\n');
+  fs.writeFileSync(path.join(root, '.github', 'pull_request_template.md'), 'UNCOMMITTED TEMPLATE INJECTION\n');
   fs.writeFileSync(path.join(root, 'local-only.txt'), 'not committed\n');
   return root;
 }
@@ -34,6 +40,10 @@ function createFakeCodex(dir) {
 const fs = require('fs');
 const args = process.argv.slice(2);
 if (args.length === 1 && args[0] === '--version') { console.log('codex-cli 999.0.0-test'); process.exit(0); }
+if (args.length === 1 && args[0] === '--help') { console.log('--ask-for-approval --config --model'); process.exit(0); }
+if (args.length === 2 && args[0] === 'exec' && args[1] === '--help') {
+  console.log('--json --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules --sandbox --output-schema --config --model'); process.exit(0);
+}
 const execIndex = args.indexOf('exec');
 const approvalIndex = args.indexOf('--ask-for-approval');
 if (execIndex < 0 || approvalIndex < 0 || approvalIndex > execIndex || args[approvalIndex + 1] !== 'never') {
@@ -44,11 +54,14 @@ const input = fs.readFileSync(0, 'utf8');
 if (!input.includes('BASE REF: main') || !input.includes('feature/pr-safe') || !input.includes('LOCAL WORKTREE: dirty') || !input.includes('--- TEXT DIFF START ---')) {
   console.error('missing expected PR context'); process.exit(4);
 }
+if (!input.includes('COMMITTED TEMPLATE MARKER') || input.includes('UNCOMMITTED TEMPLATE INJECTION') || input.includes('UNCOMMITTED CONFIG INJECTION')) {
+  console.error('repository-controlled input was not read from HEAD'); process.exit(5);
+}
+if (!input.includes('TEST EXECUTION: not verified')) { console.error('missing deterministic testing boundary'); process.exit(6); }
 const result = {
   title: 'Add safe PR generation',
   summary: ['Generate a reviewable PR description from committed changes'],
   changes: ['Add PR generation behavior'],
-  testing: [],
   risks: ['PR wording still requires human review'],
   reviewNotes: ['Review the safe generation boundary'],
   riskLevel: 'low',
