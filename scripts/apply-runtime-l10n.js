@@ -9,7 +9,7 @@ const assert = require('assert');
   const before = "function isChineseUi() { return /^zh(?:-|$)/i.test(String(vscode.env?.language || '')); }\nfunction ui(zh, en) { return isChineseUi() ? zh : en; }";
   const after = `function formatLocalized(message, args = []) {
   return String(message).replace(/\\{(\\d+)\\}/g, (_match, index) =>
-    args[Number(index)] === undefined ? \\`{\\${index}}\\` : String(args[Number(index)])
+    args[Number(index)] === undefined ? '{' + index + '}' : String(args[Number(index)])
   );
 }
 function isChineseUi() { return /^zh(?:-|$)/i.test(String(vscode.env?.language || '')); }
@@ -39,7 +39,7 @@ function ui(zh, en, ...args) {
   const properties = pkg.contributes?.configuration?.properties || {};
   const keys = Object.keys(properties).filter(key => key.startsWith('safeCodexPr.'));
   assert.ok(keys.length > 0, 'no safeCodexPr settings found');
-  for (const key of keys) assert.strictEqual(properties[key].scope, 'application', \\`${key} must remain application scoped\\`);
+  for (const key of keys) assert.strictEqual(properties[key].scope, 'application', key + ' must remain application scoped');
 });
 
 test('package declares runtime l10n and product identity remains stable', () => {
