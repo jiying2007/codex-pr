@@ -98,11 +98,13 @@ function runProcess(command, args, options = {}, stdinText = '', cancellationTok
       if (stderrBytes > maxStderrBytes) return terminate(Object.assign(new Error(`stderr exceeded ${maxStderrBytes} bytes`), { code: 'EOUTPUTLIMIT' }));
       stderr += chunk;
     });
+    child.stdin?.on('error', error => {
+      if (error?.code !== 'EPIPE' && !settled) settle(reject, error);
+    });
 
     child.once('error', error => settle(reject, error));
     child.once('close', (code, signal) => {
-      if (settled) return;
-      if (terminating) return;
+      if (settled || terminating) return;
       if (code === 0) return settle(resolve, { stdout, stderr, code, signal });
       const error = new Error(`Command failed (${code ?? signal}): ${command}`);
       error.code = code;
