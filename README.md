@@ -4,34 +4,36 @@ English | [简体中文](README.zh-CN.md)
 
 Codex PR Safe is a VS Code extension that generates a **reviewable pull request title and description from committed Git changes** using your local OpenAI Codex CLI.
 
-It is designed as the PR companion to **Codex Commit Safe** and **Codex Review**: deterministic Git input, structured Codex output, local formatting, explicit stale-result protection, and no automatic external write.
+It is the PR companion to **Codex Commit Safe** and **Codex Review**: deterministic Git input, structured Codex output, local formatting, explicit stale-result protection, and no automatic remote write.
 
 ## What it does
 
-- Compares the current branch against a selected local Git base ref such as `origin/main`.
-- Uses committed history only: `merge-base`, commit list, diff stat, name status, and textual diff.
-- Explicitly excludes staged/uncommitted working-tree changes from PR analysis.
-- Generates structured fields: title, summary, changes, testing, risks, review notes, risk level, and breaking-change flag.
-- Formats the final Markdown locally instead of asking the model to produce arbitrary PR Markdown.
-- Shows an editable preview before you copy or open GitHub.
-- Supports English and Simplified Chinese independently from the VS Code UI language.
-- Supports same-repository and fork GitHub compare URLs when local remotes are recognizable.
-- Never pushes, fetches, creates, updates, or submits a remote pull request automatically.
+- Compares the current branch with a selected local Git base ref.
+- Uses committed history only: merge base, commit list, diff stat, name status, and textual diff.
+- Keeps staged/unstaged working-tree changes out of PR analysis.
+- Generates structured title, summary, changes, risks, review notes, risk level, and breaking-change metadata.
+- Adds the **Testing** section locally and always states that test execution was not verified; the model cannot claim tests passed.
+- Formats final Markdown locally and opens an editable preview.
+- Supports English and Simplified Chinese output independently from the VS Code UI language.
+- Supports same-repository and fork GitHub Compare URLs when local remotes are recognizable.
+- Never fetches, pushes, creates, updates, or submits a remote pull request automatically.
 
 ## Safety model
 
 Codex PR Safe is deliberately conservative:
 
 1. **Trusted local workspace only.** Restricted Mode and virtual workspaces are unsupported.
-2. **Committed range only.** Local staged/unstaged changes are not mixed into the PR description.
-3. **No implicit network Git operations.** The extension does not `fetch`, `pull`, or `push`; base refs are whatever you already have locally.
-4. **Read-only Codex execution.** Codex runs in an empty temporary directory with `read-only` sandboxing, approvals disabled, web search disabled, and shell/app/multi-agent capabilities disabled.
-5. **Prompt-injection boundary.** Diffs, filenames, commit messages, PR templates, previous output, and repository configuration are explicitly treated as untrusted data.
-6. **Structured output.** Codex must return a closed JSON Schema. The extension validates it and formats Markdown locally.
-7. **Evidence-aware testing text.** The model is forbidden from claiming tests passed unless supplied Git data actually provides that evidence; otherwise the final body states that test execution was not verified.
-8. **Stale-result rejection.** The extension snapshots `HEAD OID + base OID + base ref` before collection, after collection, and before using the generated result.
-9. **No remote PR write.** “Open GitHub PR” copies the editable title/body, then opens the GitHub Compare page. You remain responsible for the final remote submission.
-10. **No sensitive logging.** The Output channel does not log source diffs, commit contents, generated PR text, or repository paths.
+2. **Committed range only.** PR source data comes from committed `base...HEAD` state. Staged/unstaged changes are excluded.
+3. **Committed repository controls only.** `.codex-pr.json` and PR templates are read from the `HEAD` Git object, not the working tree. Repository symlinks are not followed.
+4. **No implicit Git network operations.** The extension never runs `fetch`, `pull`, or `push`; base refs are whatever you already have locally.
+5. **Read-only Codex execution.** Codex runs in an empty temporary directory with `read-only` sandboxing, approvals disabled, web search disabled, and shell/app/multi-agent capabilities disabled.
+6. **CLI capability preflight.** Before generation, the extension checks `codex --help` and `codex exec --help` for the safety and structured-output capabilities it requires. The result is cached by executable/version.
+7. **Prompt-injection boundary.** Diffs, filenames, commit messages, PR templates, previous output, and repository configuration are explicitly treated as untrusted data.
+8. **Structured output.** Codex must return a closed JSON Schema. Summary and changes must be non-empty, and non-low risk requires concrete risks.
+9. **Deterministic test status.** Codex PR Safe does not ingest a verified test-run result, so it never lets the model assert that tests passed. The Testing section is generated locally as “not verified.”
+10. **Stale-result rejection.** The extension snapshots `HEAD OID + base OID + base ref` during generation and rechecks it before every Copy/Open egress action. A stale preview disables those actions until regeneration.
+11. **No remote PR write.** “Open GitHub PR” copies the editable title/body and opens the GitHub Compare page. You remain responsible for the final submission.
+12. **No sensitive Output logging.** The persistent Output channel logs lifecycle/error codes, not source diffs, commit contents, generated PR text, raw Codex stderr, or repository paths.
 
 Organization-managed Codex policy can still apply; the extension does not attempt to bypass it.
 
@@ -46,6 +48,8 @@ Verify Codex first:
 
 ```bash
 codex --version
+codex --help
+codex exec --help
 ```
 
 ## Commands
@@ -62,35 +66,52 @@ Open the Command Palette and run:
 - `Codex PR Safe: Open GitHub PR`
 - `Codex PR Safe: Check Environment`
 
-The Source Control title bar also exposes **Generate PR** (`git-pull-request`) and **Regenerate PR** (`redo`).
+The Source Control title bar exposes **Generate PR** (`git-pull-request`) and **Regenerate PR** (`redo`).
 
 ## Base branch behavior
 
-Codex PR Safe does not contact the network to discover the remote default branch. It uses local refs in this order:
+Codex PR Safe does not contact the network to discover the remote default branch.
 
-1. `safeCodexPr.baseBranch` / `.codex-pr.json` if configured and present.
-2. Local `origin/HEAD` or `upstream/HEAD` symbolic refs.
-3. Common refs such as `origin/main`, `origin/master`, `upstream/main`, `main`, `master`, `develop`, or `dev`.
-4. Another available local/remote branch ref.
+Selection rules are intentionally conservative:
 
-Use **Choose Base and Generate PR** whenever you want explicit control.
+1. A valid explicit `safeCodexPr.baseBranch` / committed `.codex-pr.json` value wins.
+2. In a recognized fork topology (`origin` = fork, `upstream` = different GitHub repository), a local `upstream/HEAD` is preferred.
+3. Otherwise a local `origin/HEAD`, then `upstream/HEAD`, is preferred.
+4. Common local refs such as `origin/main`, `upstream/main`, `main`, `master`, `develop`, or `dev` are considered.
+5. If no high-confidence base exists, the extension **does not pick an arbitrary branch**; it asks you to choose.
 
-If your remote refs may be stale, run `git fetch` yourself first. The extension intentionally does not do it for you.
+A slash no longer implies a remote. For example, a local branch named `release/1.0` remains a local branch unless `release` is an actual configured Git remote.
+
+If remote refs may be stale, run `git fetch` yourself first. The extension intentionally does not do it for you.
+
+## Fork and push-remote behavior
+
+When opening GitHub Compare, remote resolution uses actual configured Git remotes rather than string guessing. For the current branch, the push target is resolved in this order:
+
+1. `branch.<name>.pushRemote`
+2. `remote.pushDefault`
+3. `branch.<name>.remote`
+4. `origin`
+5. another configured remote
+
+For a local Base branch, Codex PR Safe verifies which configured remote actually contains that branch before constructing the GitHub URL. In fork workflows it prefers `upstream` when appropriate.
 
 ## Preview workflow
 
-After generation, Codex PR Safe opens an editable preview containing:
+After generation, the editable preview contains:
 
 - PR title
 - PR body
 - compare range
-- an explicit warning when local uncommitted changes exist
+- a warning when local uncommitted changes exist
 - Copy Title / Copy Body / Copy All
 - Regenerate
 - Change Base
 - Open GitHub PR
 
-Opening GitHub never submits a PR. The current branch must already be published to the recognized GitHub remote; otherwise the action is disabled.
+Before any Copy/Open action, the extension rechecks the generated snapshot. If HEAD or Base changed, the preview becomes **stale**, Copy/Open are disabled, and regeneration is required.
+
+Opening GitHub never submits a PR. The current branch must already be published to the recognized GitHub push remote.
 
 ## Settings
 
@@ -104,7 +125,7 @@ Opening GitHub never submits a PR. The current branch must already be published 
 | `safeCodexPr.maxCommitBytes` | `65536` | Maximum commit-list bytes sent to Codex |
 | `safeCodexPr.titleMaxLength` | `100` | Preferred local title limit |
 | `safeCodexPr.maxBodyChars` | `8000` | Maximum formatted body length |
-| `safeCodexPr.includePullRequestTemplate` | `true` | Include a small PR template as untrusted reference context |
+| `safeCodexPr.includePullRequestTemplate` | `true` | Include a small committed PR template as untrusted reference context |
 | `safeCodexPr.extraInstructions` | empty | Team style guidance only |
 | `safeCodexPr.timeoutSeconds` | `120` | Generation timeout |
 
@@ -112,12 +133,12 @@ Opening GitHub never submits a PR. The current branch must already be published 
 
 ## Optional repository configuration
 
-A trusted repository may add `.codex-pr.json`:
+A repository may commit `.codex-pr.json`:
 
 ```json
 {
   "language": "en",
-  "baseBranch": "origin/main",
+  "baseBranch": "upstream/main",
   "titleMaxLength": 90,
   "maxBodyChars": 7000,
   "includePullRequestTemplate": true,
@@ -125,7 +146,9 @@ A trusted repository may add `.codex-pr.json`:
 }
 ```
 
-Unknown keys are rejected. Repository config cannot choose a Codex executable or model.
+Only the copy committed in **HEAD** is used. Uncommitted edits do not affect generation. Symbolic-link config is rejected and unknown keys are rejected. Repository config cannot choose a Codex executable or model.
+
+PR templates are likewise read from HEAD and symlinks are skipped.
 
 ## PR body format
 
@@ -139,7 +162,7 @@ The final Markdown is locally formatted as:
 - ...
 
 ## Testing
-- ...
+- Test execution was not verified by Codex PR Safe.
 
 ## Risk
 - ...
@@ -150,16 +173,16 @@ The final Markdown is locally formatted as:
 - ...
 ```
 
-The generated body also records the local compare range.
+The body also records the local Base...Head compare range.
 
 ## Large PRs
 
-Oversized diffs **fail closed**. Codex PR Safe does not silently truncate the diff and pretend to have reviewed the full change. If a legitimate PR exceeds the configured limit, inspect its size and deliberately increase `safeCodexPr.maxDiffBytes` up to the hard maximum.
+Oversized diffs **fail closed**. Codex PR Safe does not silently truncate the diff and pretend to have understood the entire PR. If a legitimate PR exceeds the configured limit, inspect its size and deliberately raise `safeCodexPr.maxDiffBytes` within the hard maximum.
 
 ## Installation from VSIX
 
 ```bash
-code --install-extension codex-pr-safe-1.0.0.vsix
+code --install-extension codex-pr-safe-1.0.1.vsix
 ```
 
 ## Relationship to the Codex Safe workflow
