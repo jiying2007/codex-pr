@@ -38,6 +38,8 @@ jobs:
           git diff --cached --quiet && { echo 'expected consistency changes were not produced' >&2; exit 1; }
           git commit -m 'chore: finalize 1.0.2 localization and lockfile'
           git push origin HEAD:consistency-1.0.2
-      - name: Remove accidental probe branch
+      - name: Remove obsolete probe/migration branches
         shell: bash
-        run: git push origin --delete test-do-not-use || true
+        run: |
+          git push origin --delete test-do-not-use || true
+          git push origin --delete product-family-1.0.2 || true
