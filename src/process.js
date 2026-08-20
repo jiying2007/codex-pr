@@ -123,7 +123,7 @@ function runProcess(command, args, options = {}, stdinText = '', cancellationTok
     }
     if (cancellationToken) {
       if (cancellationToken.isCancellationRequested) return terminate(Object.assign(new Error('Operation cancelled'), { code: 'ECANCELLED' }));
-      cancellationDisposable = cancellationToken.onCancellationRequested(() => terminate(Object.assign(new Error('Operation cancelled'), { code: 'ECANCELLED' }));
+      cancellationDisposable = cancellationToken.onCancellationRequested(() => terminate(Object.assign(new Error('Operation cancelled'), { code: 'ECANCELLED' })));
     }
   });
 }
