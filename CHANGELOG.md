@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.2
+
+- Align English/Simplified-Chinese README navigation and product-family naming with Codex Commit Safe and Codex Review Safe.
+- Make every `safeCodexPr.*` VS Code setting application-scoped so Workspace/Folder Settings cannot become an uncommitted repository policy channel.
+- Add standard VS Code runtime localization bundles under `l10n/` while preserving generated PR language as an independent setting.
+- Add manifest/runtime localization parity and runtime source-key coverage validation plus a real zh-CN Extension Host smoke gate.
+- Add `SECURITY.md` and `PUBLISHING.md` documenting data flow, committed policy boundaries, process handling, logging, clean-tag rules, stable extension identity, and release supply-chain requirements.
+- Tighten VSIX packaging rules: require runtime l10n bundles and icon, exclude security/publishing/development files, and remove old bootstrap ignore residue.
+- Add repository editor settings and explicit VSIX/ZIP binary attributes for product-family consistency.
+- Keep the stricter 1.0.1 PR safety model intact: fork-aware Base resolution, HEAD-only repository inputs, deterministic Testing status, stale Copy/Open rejection, CLI capability probing, and clean release tags.
+
 ## 1.0.1
 
 - Make Base detection fork-aware: recognized fork topologies prefer the committed upstream target while explicit Base configuration still wins.

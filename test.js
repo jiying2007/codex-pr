@@ -207,6 +207,23 @@ test('HEAD-controlled reader does not follow repository symlinks', async () => {
   }
 });
 
+test('all safeCodexPr settings are application scoped', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+  const properties = pkg.contributes?.configuration?.properties || {};
+  const keys = Object.keys(properties).filter(key => key.startsWith('safeCodexPr.'));
+  assert.ok(keys.length > 0, 'no safeCodexPr settings found');
+  for (const key of keys) assert.strictEqual(properties[key].scope, 'application', key + ' must remain application scoped');
+});
+
+test('package declares runtime l10n and product identity remains stable', () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+  assert.strictEqual(pkg.name, 'codex-pr-safe');
+  assert.strictEqual(pkg.publisher, 'jiying2007');
+  assert.strictEqual(pkg.l10n, './l10n');
+  assert.ok(fs.existsSync(path.join(__dirname, 'l10n', 'bundle.l10n.json')));
+  assert.ok(fs.existsSync(path.join(__dirname, 'l10n', 'bundle.l10n.zh-cn.json')));
+});
+
 test('non-Windows command preparation never uses shell', () => {
   if (process.platform !== 'win32') {
     const prepared = prepareCommand('codex', ['--version']);
