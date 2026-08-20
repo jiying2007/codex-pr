@@ -10,19 +10,35 @@ function runGit(root, args) {
   cp.execFileSync('git', ['-C', root, ...args], { stdio: 'inherit' });
 }
 
+function smokeZhLocalization(extension) {
+  const zhPath = path.join(extension.extensionPath, 'l10n', 'bundle.l10n.zh-cn.json');
+  assert.ok(fs.existsSync(zhPath), 'Simplified-Chinese runtime bundle is missing from extension');
+  const zh = JSON.parse(fs.readFileSync(zhPath, 'utf8'));
+  assert.strictEqual(zh['Copy All'], '复制全部');
+  assert.strictEqual(zh['Regenerate'], '重新生成');
+  assert.strictEqual(zh['PR Title'], 'PR 标题');
+  assert.strictEqual(zh['The current result is stale.'], '当前结果已过期。');
+  assert.match(zh['The current branch is not published to a recognized GitHub remote.'], /GitHub remote/);
+}
+
 async function run() {
   const root = process.env.CODEX_PR_TEST_WORKSPACE;
   const codexPath = process.env.CODEX_PR_TEST_CODEX_PATH;
   assert.ok(root && codexPath, 'test environment missing');
+
   const cfg = vscode.workspace.getConfiguration('safeCodexPr');
   await cfg.update('codexPath', codexPath, vscode.ConfigurationTarget.Global);
-  await cfg.update('baseBranch', 'main', vscode.ConfigurationTarget.Workspace);
+  await cfg.update('baseBranch', 'main', vscode.ConfigurationTarget.Global);
   await cfg.update('language', 'zh-CN', vscode.ConfigurationTarget.Global);
   await cfg.update('timeoutSeconds', 30, vscode.ConfigurationTarget.Global);
 
   const extension = vscode.extensions.getExtension('jiying2007.codex-pr-safe');
   assert.ok(extension, 'extension not found');
   await extension.activate();
+  if (process.env.CODEX_PR_IT_ZH_SMOKE) smokeZhLocalization(extension);
+
+  const inspectedBase = cfg.inspect('baseBranch');
+  assert.strictEqual(inspectedBase?.globalValue, 'main', 'baseBranch must be controlled through application/user settings in integration tests');
 
   await vscode.commands.executeCommand('safeCodexPr.generate');
   const state = await vscode.commands.executeCommand('safeCodexPr._testState', root);
