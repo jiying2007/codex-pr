@@ -1,0 +1,161 @@
+name: Finalize initial release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit / regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run: npm run verify:lock
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check
+
+  integration-latest:
+    name: Extension Host / ${{ matrix.os }} / latest
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Ensure Linux Extension Host dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v xvfb-run >/dev/null 2>&1 && ldconfig -p | grep -q 'libgtk-3.so' && ldconfig -p | grep -q 'libnss3.so'; then
+            echo 'Extension Host dependencies already available.'
+          else
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2
+          fi
+      - name: Run Extension Host integration tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a npm run test:integration
+      - name: Run Extension Host integration tests
+        if: runner.os != 'Linux'
+        run: npm run test:integration
+
+  integration-minimum:
+    name: Extension Host / Ubuntu / VS Code 1.90.0
+    needs: unit
+    runs-on: ubuntu-latest
+    env:
+      VSCODE_TEST_VERSION: '1.90.0'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Ensure Linux Extension Host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v xvfb-run >/dev/null 2>&1 && ldconfig -p | grep -q 'libgtk-3.so' && ldconfig -p | grep -q 'libnss3.so'; then
+            echo 'Extension Host dependencies already available.'
+          else
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2
+          fi
+      - run: xvfb-run -a npm run test:integration
+
+  finalize:
+    name: Finalize, tag and publish
+    needs: [unit, integration-latest, integration-minimum]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Guard initial release state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').version")" = '1.0.0'
+          if git ls-remote --exit-code --tags origin refs/tags/v1.0.0 >/dev/null 2>&1; then
+            echo 'v1.0.0 already exists' >&2
+            exit 1
+          fi
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - run: npm run verify:lock
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run check
+      - run: npm run package
+      - name: Verify VSIX and create checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          vsix="codex-pr-safe-${version}.vsix"
+          unzip -Z1 "$vsix" > /tmp/vsix-files.txt
+          grep -Fx 'extension/package.nls.json' /tmp/vsix-files.txt
+          grep -Fx 'extension/package.nls.zh-cn.json' /tmp/vsix-files.txt
+          grep -Fx 'extension/README.zh-CN.md' /tmp/vsix-files.txt
+          grep -Fx 'extension/src/core.js' /tmp/vsix-files.txt
+          if grep -E '^extension/(test|scripts|package-lock\.json|\.gitignore|\.gitattributes|\.github)' /tmp/vsix-files.txt; then
+            echo 'VSIX contains development-only files' >&2
+            exit 1
+          fi
+          sha256sum "$vsix" > SHA256SUMS
+      - name: Commit exact lockfile and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/finalize-initial.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json .github/workflows/finalize-initial.yml
+          git commit -m 'chore: finalize Codex PR Safe 1.0.0'
+          git push origin HEAD:main
+      - name: Tag and publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          git tag -a "v${version}" -m "Codex PR Safe ${version}"
+          git push origin "v${version}"
+          gh release create "v${version}" \
+            "codex-pr-safe-${version}.vsix" \
+            SHA256SUMS \
+            --title "Codex PR Safe ${version}" \
+            --generate-notes \
+            --verify-tag
+      - name: Remove temporary source branch
+        shell: bash
+        run: git push origin --delete source-v1.0.0

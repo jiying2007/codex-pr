@@ -1,0 +1,13 @@
+.github/**
+.vscode/**
+test/**
+scripts/**
+package-lock.json
+.gitignore
+.gitattributes
+.codex-pr.json
+*.vsix
+SHA256SUMS
+
+.codex-pr.example.json
+.bootstrap-pending
