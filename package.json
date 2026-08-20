@@ -2,12 +2,27 @@
   "name": "codex-pr-safe",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "jiying2007",
   "license": "SEE LICENSE IN LICENSE",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["SCM Providers", "Other"],
-  "keywords": ["git", "pull request", "pr", "codex", "github", "ai", "scm", "safe", "description"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "pull request",
+    "pr",
+    "codex",
+    "github",
+    "ai",
+    "scm",
+    "safe",
+    "description"
+  ],
   "activationEvents": [
     "onCommand:safeCodexPr.generate",
     "onCommand:safeCodexPr.regenerate",
@@ -21,52 +36,205 @@
   ],
   "main": "./extension.js",
   "capabilities": {
-    "untrustedWorkspaces": { "supported": false, "description": "%capability.untrusted%" },
-    "virtualWorkspaces": { "supported": false, "description": "%capability.virtual%" }
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "%capability.untrusted%"
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "%capability.virtual%"
+    }
   },
   "contributes": {
     "commands": [
-      { "command": "safeCodexPr.generate", "title": "%command.generate.title%", "category": "%extension.displayName%", "icon": "$(git-pull-request)" },
-      { "command": "safeCodexPr.regenerate", "title": "%command.regenerate.title%", "category": "%extension.displayName%", "icon": "$(redo)" },
-      { "command": "safeCodexPr.selectBaseAndGenerate", "title": "%command.selectBase.title%", "category": "%extension.displayName%" },
-      { "command": "safeCodexPr.showLast", "title": "%command.showLast.title%", "category": "%extension.displayName%" },
-      { "command": "safeCodexPr.copyTitle", "title": "%command.copyTitle.title%", "category": "%extension.displayName%" },
-      { "command": "safeCodexPr.copyBody", "title": "%command.copyBody.title%", "category": "%extension.displayName%" },
-      { "command": "safeCodexPr.copyAll", "title": "%command.copyAll.title%", "category": "%extension.displayName%" },
-      { "command": "safeCodexPr.openPullRequest", "title": "%command.openPullRequest.title%", "category": "%extension.displayName%" },
-      { "command": "safeCodexPr.checkEnvironment", "title": "%command.checkEnvironment.title%", "category": "%extension.displayName%" }
+      {
+        "command": "safeCodexPr.generate",
+        "title": "%command.generate.title%",
+        "category": "%extension.displayName%",
+        "icon": "$(git-pull-request)"
+      },
+      {
+        "command": "safeCodexPr.regenerate",
+        "title": "%command.regenerate.title%",
+        "category": "%extension.displayName%",
+        "icon": "$(redo)"
+      },
+      {
+        "command": "safeCodexPr.selectBaseAndGenerate",
+        "title": "%command.selectBase.title%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "safeCodexPr.showLast",
+        "title": "%command.showLast.title%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "safeCodexPr.copyTitle",
+        "title": "%command.copyTitle.title%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "safeCodexPr.copyBody",
+        "title": "%command.copyBody.title%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "safeCodexPr.copyAll",
+        "title": "%command.copyAll.title%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "safeCodexPr.openPullRequest",
+        "title": "%command.openPullRequest.title%",
+        "category": "%extension.displayName%"
+      },
+      {
+        "command": "safeCodexPr.checkEnvironment",
+        "title": "%command.checkEnvironment.title%",
+        "category": "%extension.displayName%",
+        "icon": "$(check)"
+      }
     ],
     "menus": {
       "scm/title": [
-        { "command": "safeCodexPr.generate", "when": "scmProvider == git && isWorkspaceTrusted", "group": "navigation@9" },
-        { "command": "safeCodexPr.regenerate", "when": "scmProvider == git && isWorkspaceTrusted", "group": "navigation@10" }
+        {
+          "command": "safeCodexPr.generate",
+          "when": "scmProvider == git && isWorkspaceTrusted",
+          "group": "navigation@9"
+        },
+        {
+          "command": "safeCodexPr.regenerate",
+          "when": "scmProvider == git && isWorkspaceTrusted",
+          "group": "navigation@10"
+        }
       ],
       "commandPalette": [
-        { "command": "safeCodexPr.generate", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
-        { "command": "safeCodexPr.regenerate", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
-        { "command": "safeCodexPr.selectBaseAndGenerate", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
-        { "command": "safeCodexPr.showLast", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
-        { "command": "safeCodexPr.copyTitle", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
-        { "command": "safeCodexPr.copyBody", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
-        { "command": "safeCodexPr.copyAll", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
-        { "command": "safeCodexPr.openPullRequest", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
-        { "command": "safeCodexPr.checkEnvironment", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" }
+        {
+          "command": "safeCodexPr.generate",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        },
+        {
+          "command": "safeCodexPr.regenerate",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        },
+        {
+          "command": "safeCodexPr.selectBaseAndGenerate",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        },
+        {
+          "command": "safeCodexPr.showLast",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        },
+        {
+          "command": "safeCodexPr.copyTitle",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        },
+        {
+          "command": "safeCodexPr.copyBody",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        },
+        {
+          "command": "safeCodexPr.copyAll",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        },
+        {
+          "command": "safeCodexPr.openPullRequest",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        },
+        {
+          "command": "safeCodexPr.checkEnvironment",
+          "when": "workspaceFolderCount > 0 && isWorkspaceTrusted"
+        }
       ]
     },
     "configuration": {
       "title": "%extension.displayName%",
       "properties": {
-        "safeCodexPr.codexPath": { "type": "string", "default": "codex", "scope": "application", "description": "%config.codexPath%" },
-        "safeCodexPr.model": { "type": "string", "default": "", "scope": "application", "description": "%config.model%" },
-        "safeCodexPr.language": { "type": "string", "enum": ["zh-CN", "en"], "default": "zh-CN", "scope": "application", "description": "%config.language%", "enumDescriptions": ["%config.language.zhCN%", "%config.language.en%"] },
-        "safeCodexPr.baseBranch": { "type": "string", "default": "", "description": "%config.baseBranch%" },
-        "safeCodexPr.maxDiffBytes": { "type": "number", "default": 524288, "minimum": 4096, "maximum": 2097152, "scope": "application", "description": "%config.maxDiffBytes%" },
-        "safeCodexPr.maxCommitBytes": { "type": "number", "default": 65536, "minimum": 4096, "maximum": 524288, "scope": "application", "description": "%config.maxCommitBytes%" },
-        "safeCodexPr.titleMaxLength": { "type": "number", "default": 100, "minimum": 40, "maximum": 160, "description": "%config.titleMaxLength%" },
-        "safeCodexPr.maxBodyChars": { "type": "number", "default": 8000, "minimum": 1000, "maximum": 20000, "description": "%config.maxBodyChars%" },
-        "safeCodexPr.includePullRequestTemplate": { "type": "boolean", "default": true, "description": "%config.includePullRequestTemplate%" },
-        "safeCodexPr.extraInstructions": { "type": "string", "default": "", "description": "%config.extraInstructions%" },
-        "safeCodexPr.timeoutSeconds": { "type": "number", "default": 120, "minimum": 10, "maximum": 300, "scope": "application", "description": "%config.timeoutSeconds%" }
+        "safeCodexPr.codexPath": {
+          "type": "string",
+          "default": "codex",
+          "scope": "application",
+          "description": "%config.codexPath%"
+        },
+        "safeCodexPr.model": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "%config.model%"
+        },
+        "safeCodexPr.language": {
+          "type": "string",
+          "enum": [
+            "zh-CN",
+            "en"
+          ],
+          "default": "zh-CN",
+          "scope": "application",
+          "description": "%config.language%",
+          "enumDescriptions": [
+            "%config.language.zhCN%",
+            "%config.language.en%"
+          ]
+        },
+        "safeCodexPr.baseBranch": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "%config.baseBranch%"
+        },
+        "safeCodexPr.maxDiffBytes": {
+          "type": "number",
+          "default": 524288,
+          "minimum": 4096,
+          "maximum": 2097152,
+          "scope": "application",
+          "description": "%config.maxDiffBytes%"
+        },
+        "safeCodexPr.maxCommitBytes": {
+          "type": "number",
+          "default": 65536,
+          "minimum": 4096,
+          "maximum": 524288,
+          "scope": "application",
+          "description": "%config.maxCommitBytes%"
+        },
+        "safeCodexPr.titleMaxLength": {
+          "type": "number",
+          "default": 100,
+          "minimum": 40,
+          "maximum": 160,
+          "scope": "application",
+          "description": "%config.titleMaxLength%"
+        },
+        "safeCodexPr.maxBodyChars": {
+          "type": "number",
+          "default": 8000,
+          "minimum": 1000,
+          "maximum": 20000,
+          "scope": "application",
+          "description": "%config.maxBodyChars%"
+        },
+        "safeCodexPr.includePullRequestTemplate": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "description": "%config.includePullRequestTemplate%"
+        },
+        "safeCodexPr.extraInstructions": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "description": "%config.extraInstructions%"
+        },
+        "safeCodexPr.timeoutSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 10,
+          "maximum": 300,
+          "scope": "application",
+          "description": "%config.timeoutSeconds%"
+        }
       }
     }
   },
@@ -84,10 +252,16 @@
     "@vscode/test-electron": "3.1.0",
     "@vscode/vsce": "3.9.2"
   },
-  "repository": { "type": "git", "url": "https://github.com/jiying2007/codex-pr.git" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jiying2007/codex-pr.git"
+  },
   "homepage": "https://github.com/jiying2007/codex-pr#readme",
-  "bugs": { "url": "https://github.com/jiying2007/codex-pr/issues" },
+  "bugs": {
+    "url": "https://github.com/jiying2007/codex-pr/issues"
+  },
   "pricing": "Free",
   "preview": false,
-  "icon": "images/icon.png"
+  "icon": "images/icon.png",
+  "l10n": "./l10n"
 }
