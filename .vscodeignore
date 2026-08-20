@@ -1,6 +1,7 @@
 .github/**
 .vscode/**
 test/**
+test.js
 scripts/**
 package-lock.json
 .gitignore
