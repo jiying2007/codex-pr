@@ -91,9 +91,36 @@ jobs:
           fi
       - run: xvfb-run -a npm run test:integration
 
+  integration-zh-cn:
+    name: Extension Host / Ubuntu / zh-CN localization
+    needs: unit
+    runs-on: ubuntu-latest
+    env:
+      CODEX_PR_IT_ZH_SMOKE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Ensure Linux Extension Host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v xvfb-run >/dev/null 2>&1 && ldconfig -p | grep -q 'libgtk-3.so' && ldconfig -p | grep -q 'libnss3.so'; then
+            echo 'Extension Host dependencies already available.'
+          else
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2
+          fi
+      - run: xvfb-run -a npm run test:integration
+
   package:
     name: Official VSIX package
-    needs: [integration-latest, integration-minimum]
+    needs: [integration-latest, integration-minimum, integration-zh-cn]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,9 +141,12 @@ jobs:
           unzip -Z1 "$vsix" > /tmp/vsix-files.txt
           grep -Fx 'extension/package.nls.json' /tmp/vsix-files.txt
           grep -Fx 'extension/package.nls.zh-cn.json' /tmp/vsix-files.txt
+          grep -Fx 'extension/l10n/bundle.l10n.json' /tmp/vsix-files.txt
+          grep -Fx 'extension/l10n/bundle.l10n.zh-cn.json' /tmp/vsix-files.txt
           grep -Fx 'extension/README.zh-CN.md' /tmp/vsix-files.txt
+          grep -Fx 'extension/images/icon.png' /tmp/vsix-files.txt
           grep -Fx 'extension/src/core.js' /tmp/vsix-files.txt
-          if grep -E '^extension/(test|scripts|package-lock\.json|\.gitignore|\.gitattributes|\.github)' /tmp/vsix-files.txt; then
+          if grep -E '^extension/(test|scripts|package-lock\.json|SECURITY\.md|PUBLISHING\.md|\.gitignore|\.gitattributes|\.github|\.vscode|\.codex-pr\.example\.json)' /tmp/vsix-files.txt; then
             echo 'VSIX contains development-only files' >&2
             exit 1
           fi
