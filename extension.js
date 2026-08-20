@@ -33,8 +33,22 @@ const lastByRepo = new Map();
 const activeGenerations = new Map();
 let nextGenerationId = 1;
 
+function formatLocalized(message, args = []) {
+  return String(message).replace(/\{(\d+)\}/g, (_match, index) =>
+    args[Number(index)] === undefined ? '{' + index + '}' : String(args[Number(index)])
+  );
+}
 function isChineseUi() { return /^zh(?:-|$)/i.test(String(vscode.env?.language || '')); }
-function ui(zh, en) { return isChineseUi() ? zh : en; }
+function t(message, ...args) {
+  if (vscode.l10n?.t) return vscode.l10n.t(message, ...args);
+  return formatLocalized(message, args);
+}
+function ui(zh, en, ...args) {
+  const english = formatLocalized(en, args);
+  const localized = t(en, ...args);
+  if (localized !== english || !isChineseUi()) return localized;
+  return formatLocalized(zh, args);
+}
 function log(message) { outputChannel?.appendLine(`[${new Date().toISOString()}] ${message}`); }
 
 function assertTrustedWorkspace() {
