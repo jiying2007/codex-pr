@@ -86,7 +86,10 @@ function effectiveOptions(root) {
 }
 
 function normalizeFsPath(value) {
-  const resolved = path.resolve(value);
+  let resolved = path.resolve(value);
+  try {
+    resolved = fs.realpathSync.native ? fs.realpathSync.native(resolved) : fs.realpathSync(resolved);
+  } catch {}
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
@@ -258,6 +261,7 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
     log(`generation completed: risk=${stored.structured.riskLevel}, breaking=${stored.structured.breakingChange}`);
   } catch (error) {
     if (error?.code !== 'ECANCELLED') showError(error);
+    if (extensionMode === vscode.ExtensionMode.Test) throw error;
   } finally { finishGeneration(key, state.id); }
 }
 
@@ -303,7 +307,10 @@ function activate(context) {
   extensionMode = context.extensionMode;
   outputChannel = vscode.window.createOutputChannel('Codex PR Safe');
   context.subscriptions.push(outputChannel);
-  const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, (...args) => Promise.resolve(fn(args)).catch(showError)));
+  const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, (...args) => Promise.resolve(fn(args)).catch(error => {
+    if (extensionMode === vscode.ExtensionMode.Test) throw error;
+    showError(error);
+  })));
   reg('safeCodexPr.generate', args => generate({ commandArgs: args }));
   reg('safeCodexPr.regenerate', args => generate({ regenerate: true, commandArgs: args }));
   reg('safeCodexPr.selectBaseAndGenerate', args => generate({ commandArgs: args, forceBasePick: true }));
