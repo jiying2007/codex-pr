@@ -6,6 +6,8 @@ const path = require('path');
 const { runProcess, runPreparedProcess } = require('./process');
 const { buildPrompt, outputSchema, buildCodexArgs, buildCodexInput, parseCodexJsonl, validateStructuredResult } = require('./core');
 
+const capabilityCache = new Map();
+
 async function findWindowsCodexCandidates(codexPath) {
   if (process.platform !== 'win32' || codexPath !== 'codex') return [codexPath];
   const candidates = [];
@@ -48,6 +50,50 @@ async function resolveCodexExecutable(codexPath) {
   throw error;
 }
 
+function helpHas(text, flag) {
+  return String(text || '').includes(flag);
+}
+
+async function probeCodexCapabilities(resolved, model = '') {
+  const cacheKey = `${resolved.executable}\n${resolved.version}\n${model ? 'model' : 'default'}`;
+  if (capabilityCache.has(cacheKey)) return capabilityCache.get(cacheKey);
+
+  let topHelp;
+  let execHelp;
+  try {
+    const [top, exec] = await Promise.all([
+      runPreparedProcess(resolved.executable, ['--help'], { timeoutMs: 10000, maxStdoutBytes: 1024 * 1024, maxStderrBytes: 256 * 1024 }),
+      runPreparedProcess(resolved.executable, ['exec', '--help'], { timeoutMs: 10000, maxStdoutBytes: 1024 * 1024, maxStderrBytes: 256 * 1024 })
+    ]);
+    topHelp = `${top.stdout}\n${top.stderr}`;
+    execHelp = `${exec.stdout}\n${exec.stderr}`;
+  } catch (error) {
+    const wrapped = new Error(`Unable to inspect Codex CLI capabilities for ${resolved.version}. Make sure "codex --help" and "codex exec --help" succeed.`);
+    wrapped.code = 'ECODEXCAPABILITY';
+    wrapped.cause = error;
+    throw wrapped;
+  }
+
+  const missing = [];
+  if (!helpHas(topHelp, '--ask-for-approval')) missing.push('top-level --ask-for-approval');
+  for (const flag of ['--json', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules', '--sandbox', '--output-schema']) {
+    if (!helpHas(execHelp, flag)) missing.push(`exec ${flag}`);
+  }
+  const combined = `${topHelp}\n${execHelp}`;
+  if (!helpHas(combined, '--config')) missing.push('--config');
+  if (model && !helpHas(combined, '--model')) missing.push('--model');
+
+  if (missing.length) {
+    const error = new Error(`Codex CLI ${resolved.version} does not expose required capabilities: ${missing.join(', ')}.`);
+    error.code = 'ECODEXCAPABILITY';
+    throw error;
+  }
+
+  const result = { ...resolved, capabilitiesVerified: true };
+  capabilityCache.set(cacheKey, result);
+  return result;
+}
+
 function isCliCompatibilityError(error) {
   const text = `${error?.stderr || ''}\n${error?.stdout || ''}\n${error?.message || ''}`.toLowerCase();
   return text.includes('unexpected argument') || text.includes('unknown argument') || text.includes('unrecognized option') || text.includes('unknown option');
@@ -61,6 +107,7 @@ async function withTemporaryDirectory(fn) {
 
 async function runCodex(context, options, previousResult, token) {
   const resolved = await resolveCodexExecutable(options.codexPath);
+  await probeCodexCapabilities(resolved, options.model);
   const prompt = buildPrompt(options, context, previousResult);
   const stdin = buildCodexInput(prompt, context, previousResult);
   return withTemporaryDirectory(async tempDir => {
@@ -77,7 +124,7 @@ async function runCodex(context, options, previousResult, token) {
       }, stdin, token);
     } catch (error) {
       if (isCliCompatibilityError(error)) {
-        const wrapped = new Error(`The current Codex CLI is incompatible with arguments required by Codex PR Safe. Check the Codex CLI version. Original error: ${error.stderr || error.message}`);
+        const wrapped = new Error(`The current Codex CLI is incompatible with the safety/structured-output arguments required by Codex PR Safe. Use a Codex CLI version that exposes the required capabilities. Original error: ${error.stderr || error.message}`);
         wrapped.code = 'ECODEXVERSION';
         throw wrapped;
       }
@@ -91,4 +138,12 @@ async function runCodex(context, options, previousResult, token) {
   });
 }
 
-module.exports = { findWindowsCodexCandidates, resolveCodexExecutable, isCliCompatibilityError, withTemporaryDirectory, runCodex };
+module.exports = {
+  findWindowsCodexCandidates,
+  resolveCodexExecutable,
+  probeCodexCapabilities,
+  isCliCompatibilityError,
+  withTemporaryDirectory,
+  runCodex,
+  _capabilityCache: capabilityCache
+};

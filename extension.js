@@ -19,9 +19,10 @@ const {
   detectBase,
   repositorySnapshot,
   collectPrContext,
-  resolveGitHubOpenContext
+  resolveGitHubOpenContext,
+  readHeadBlob
 } = require('./src/git');
-const { resolveCodexExecutable, runCodex } = require('./src/codex');
+const { resolveCodexExecutable, probeCodexCapabilities, runCodex } = require('./src/codex');
 const { previewHtml } = require('./src/preview');
 
 let outputChannel;
@@ -48,22 +49,21 @@ function getUserOnlySetting(config, key, fallback) {
   return inspected.defaultValue !== undefined ? inspected.defaultValue : fallback;
 }
 
-function readProjectRules(root) {
-  const file = path.join(root, PROJECT_RULES_FILE);
+async function readProjectRules(root, token) {
+  const blob = await readHeadBlob(root, PROJECT_RULES_FILE, 32 * 1024, token);
+  if (!blob) return {};
+  if (blob.symlink) throw new Error(`${PROJECT_RULES_FILE} in HEAD must be a regular file, not a symbolic link.`);
+  if (blob.tooLarge) throw new Error(`${PROJECT_RULES_FILE} in HEAD exceeds 32 KiB.`);
   try {
-    const stat = fs.statSync(file);
-    if (!stat.isFile()) return {};
-    if (stat.size > 32 * 1024) throw new Error(`${PROJECT_RULES_FILE} exceeds 32 KiB.`);
-    return validateProjectRulesObject(JSON.parse(fs.readFileSync(file, 'utf8')));
+    return validateProjectRulesObject(JSON.parse(blob.text));
   } catch (error) {
-    if (error?.code === 'ENOENT') return {};
-    throw new Error(ui(`无法读取 ${PROJECT_RULES_FILE}：${error.message}`, `Failed to read ${PROJECT_RULES_FILE}: ${error.message}`));
+    throw new Error(ui(`无法读取 HEAD 中的 ${PROJECT_RULES_FILE}：${error.message}`, `Failed to read ${PROJECT_RULES_FILE} from HEAD: ${error.message}`));
   }
 }
 
-function effectiveOptions(root) {
+async function effectiveOptions(root, token) {
   const config = vscode.workspace.getConfiguration('safeCodexPr');
-  const project = readProjectRules(root);
+  const project = await readProjectRules(root, token);
   const codexPath = String(getUserOnlySetting(config, 'codexPath', 'codex') || 'codex').trim() || 'codex';
   const model = String(getUserOnlySetting(config, 'model', '') || '').trim();
   const language = project.language ?? config.get('language', 'zh-CN');
@@ -87,9 +87,7 @@ function effectiveOptions(root) {
 
 function normalizeFsPath(value) {
   let resolved = path.resolve(value);
-  try {
-    resolved = fs.realpathSync.native ? fs.realpathSync.native(resolved) : fs.realpathSync(resolved);
-  } catch {}
+  try { resolved = fs.realpathSync.native ? fs.realpathSync.native(resolved) : fs.realpathSync(resolved); } catch {}
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
@@ -132,8 +130,12 @@ async function selectBase(root, options, token, forcePick = false) {
       const cb = normalizeRef(b.name) === normalizeRef(detected.candidate) ? -1 : 0;
       return ca - cb || a.name.localeCompare(b.name);
     })
-    .map(r => ({ label: r.name, description: r.oid.slice(0, 10), ref: r.name }));
-  const picked = await vscode.window.showQuickPick(items, { placeHolder: ui('选择 PR Base（仅使用本地已有 refs，不会自动 fetch）', 'Select PR base (uses local refs only; no automatic fetch)') });
+    .map(r => ({ label: r.name, description: `${r.kind || 'ref'} · ${r.oid.slice(0, 10)}`, ref: r.name }));
+  const picked = await vscode.window.showQuickPick(items, {
+    placeHolder: detected.forkTopology
+      ? ui('选择 PR Base（检测到 fork；建议选择 upstream 的目标分支）', 'Select PR base (fork detected; prefer the upstream target branch)')
+      : ui('选择 PR Base（没有高置信度默认值；不会自动 fetch）', 'Select PR base (no high-confidence default; no automatic fetch)')
+  });
   return picked?.ref || '';
 }
 
@@ -167,14 +169,15 @@ async function buildPreviewState(root, baseRef, context, structured, formatted, 
     body: formatted.body,
     compareUrl,
     canOpenGitHub: Boolean(compareUrl && gh.published),
-    codexVersion
+    codexVersion,
+    stale: false
   };
 }
 
 function validateEditedResult(title, body) {
   const t = String(title || '').trim().replace(/\r?\n/g, ' ');
   const b = String(body || '').trim();
-  if (!t || t.length > 160) throw new Error(ui('PR 标题为空或超过 160 字符。', 'PR title is empty or exceeds 160 characters.'));
+  if (!t || Array.from(t).length > 160) throw new Error(ui('PR 标题为空或超过 160 个字符。', 'PR title is empty or exceeds 160 characters.'));
   if (b.length > 20000) throw new Error(ui('PR 正文超过 20000 字符。', 'PR body exceeds 20000 characters.'));
   if (/[\0-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(`${t}\n${b}`)) throw new Error(ui('PR 内容包含非法控制字符。', 'PR content contains invalid control characters.'));
   return { title: t, body: b };
@@ -186,6 +189,16 @@ async function copyValue(kind, edited) {
   const value = kind === 'title' ? edited.title : kind === 'body' ? edited.body : textForClipboard(edited.title, edited.body);
   await vscode.env.clipboard.writeText(value);
   vscode.window.setStatusBarMessage(ui('Codex PR Safe：已复制', 'Codex PR Safe: copied'), 2500);
+}
+
+async function ensureFreshResult(state, token) {
+  const current = await repositorySnapshot(state.root, state.baseRef, token);
+  if (!snapshotEqual(current, state.snapshot)) {
+    const error = new Error(ui('HEAD 或 Base 已变化，当前 PR 结果已过期，请重新生成。', 'HEAD or base changed. The current PR result is stale; regenerate it first.'));
+    error.code = 'ESTALE';
+    throw error;
+  }
+  return current;
 }
 
 async function renderPreview(state) {
@@ -201,27 +214,41 @@ async function renderPreview(state) {
     try {
       const allowed = new Set(['copyAll', 'copyTitle', 'copyBody', 'regenerate', 'changeBase', 'openGitHub']);
       if (!message || !allowed.has(message.type)) return;
-      const edited = validateEditedResult(message.title, message.body);
       const latest = lastByRepo.get(normalizeFsPath(state.root));
       if (!latest) throw new Error(ui('当前 PR 结果已失效，请重新生成。', 'The current PR result is stale. Generate it again.'));
-      latest.title = edited.title; latest.body = edited.body;
+
+      if (['copyAll', 'copyTitle', 'copyBody', 'openGitHub'].includes(message.type)) await ensureFreshResult(latest);
+      const edited = validateEditedResult(message.title, message.body);
+      latest.title = edited.title;
+      latest.body = edited.body;
+      latest.stale = false;
+
       if (message.type === 'copyAll') return copyValue('all', edited);
       if (message.type === 'copyTitle') return copyValue('title', edited);
       if (message.type === 'copyBody') return copyValue('body', edited);
       if (message.type === 'regenerate') return generate({ regenerate: true, rootOverride: state.root, baseOverride: state.baseRef });
       if (message.type === 'changeBase') return generate({ regenerate: false, rootOverride: state.root, forceBasePick: true });
       if (message.type === 'openGitHub') {
-        const currentSnapshot = await repositorySnapshot(state.root, state.baseRef);
-        if (!snapshotEqual(currentSnapshot, latest.snapshot)) throw new Error(ui('HEAD 或 Base 已变化，请重新生成 PR。', 'HEAD or base changed. Regenerate the PR first.'));
         const gh = await resolveGitHubOpenContext(state.root, state.baseRef, state.headBranch);
         const compareUrl = buildGitHubCompareUrl({ baseRemote: gh.baseRemote, baseBranch: gh.baseBranch, headRemote: gh.headRemote, headBranch: gh.headBranch });
         if (!compareUrl || !gh.published) throw new Error(ui('当前分支尚未推送到可识别的 GitHub remote。', 'The current branch is not published to a recognized GitHub remote.'));
-        latest.compareUrl = compareUrl; latest.canOpenGitHub = true;
+        latest.compareUrl = compareUrl;
+        latest.canOpenGitHub = true;
         await copyValue('all', edited);
         await vscode.env.openExternal(vscode.Uri.parse(compareUrl));
         vscode.window.showInformationMessage(ui('PR 标题和正文已复制；请在 GitHub 页面最终确认并提交。', 'PR title/body copied. Review and submit them on GitHub.'));
       }
-    } catch (error) { showError(error); }
+    } catch (error) {
+      if (error?.code === 'ESTALE') {
+        const latest = lastByRepo.get(normalizeFsPath(state.root));
+        if (latest) {
+          latest.stale = true;
+          if (previewPanel) previewPanel.webview.html = previewHtml(previewPanel.webview, latest, ui);
+        }
+      }
+      showError(error);
+      if (extensionMode === vscode.ExtensionMode.Test) throw error;
+    }
   });
 }
 
@@ -229,7 +256,7 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
   assertTrustedWorkspace();
   const root = rootOverride || await chooseRepository(commandArgs);
   if (!root) return;
-  const options = effectiveOptions(root);
+  const options = await effectiveOptions(root);
   const prior = lastByRepo.get(normalizeFsPath(root));
   const baseRef = baseOverride || (regenerate && prior?.baseRef) || await selectBase(root, options, undefined, forceBasePick);
   if (!baseRef) return;
@@ -237,7 +264,11 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
   log(`${regenerate ? 'regenerate' : 'generate'} started for ${repoLabel(root)}: ${baseRef}...HEAD`);
 
   try {
-    const generated = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: regenerate ? ui('Codex 正在重新生成 PR…', 'Codex is regenerating the PR…') : ui('Codex 正在生成 PR…', 'Codex is generating the PR…'), cancellable: true }, async (_progress, uiToken) => {
+    const generated = await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: regenerate ? ui('Codex 正在重新生成 PR…', 'Codex is regenerating the PR…') : ui('Codex 正在生成 PR…', 'Codex is generating the PR…'),
+      cancellable: true
+    }, async (_progress, uiToken) => {
       const linked = linkCancellation(uiToken, state.cancelSource);
       try {
         const token = state.cancelSource.token;
@@ -262,7 +293,9 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
   } catch (error) {
     if (error?.code !== 'ECANCELLED') showError(error);
     if (extensionMode === vscode.ExtensionMode.Test) throw error;
-  } finally { finishGeneration(key, state.id); }
+  } finally {
+    finishGeneration(key, state.id);
+  }
 }
 
 async function commandWithLast(kind, commandArgs = []) {
@@ -271,8 +304,8 @@ async function commandWithLast(kind, commandArgs = []) {
   if (!root) return;
   const state = lastByRepo.get(normalizeFsPath(root));
   if (!state) throw new Error(ui('该仓库还没有生成过 PR，请先运行 Generate PR。', 'No PR has been generated for this repository yet. Run Generate PR first.'));
-  const current = await repositorySnapshot(root, state.baseRef);
-  if (!snapshotEqual(current, state.snapshot)) throw new Error(ui('HEAD 或 Base 已变化，请重新生成 PR。', 'HEAD or base changed. Regenerate the PR.'));
+  await ensureFreshResult(state);
+  state.stale = false;
   if (kind === 'show') return renderPreview(state);
   if (kind === 'title') return copyValue('title', state);
   if (kind === 'body') return copyValue('body', state);
@@ -281,7 +314,8 @@ async function commandWithLast(kind, commandArgs = []) {
     const gh = await resolveGitHubOpenContext(root, state.baseRef, state.headBranch);
     const compareUrl = buildGitHubCompareUrl({ baseRemote: gh.baseRemote, baseBranch: gh.baseBranch, headRemote: gh.headRemote, headBranch: gh.headBranch });
     if (!compareUrl || !gh.published) throw new Error(ui('当前分支尚未推送到可识别的 GitHub remote。', 'The current branch is not published to a recognized GitHub remote.'));
-    state.compareUrl = compareUrl; state.canOpenGitHub = true;
+    state.compareUrl = compareUrl;
+    state.canOpenGitHub = true;
     await copyValue('all', state);
     await vscode.env.openExternal(vscode.Uri.parse(compareUrl));
   }
@@ -291,15 +325,19 @@ async function checkEnvironment(commandArgs = []) {
   assertTrustedWorkspace();
   const root = await chooseRepository(commandArgs);
   if (!root) return;
-  const options = effectiveOptions(root);
+  const options = await effectiveOptions(root);
   const detected = await detectBase(root, options.baseBranch);
   const resolved = await resolveCodexExecutable(options.codexPath);
-  vscode.window.showInformationMessage(ui(`Codex PR Safe 环境正常：${resolved.version}；当前分支 ${detected.branch}；Base ${detected.candidate || '未检测到'}`, `Codex PR Safe environment OK: ${resolved.version}; branch ${detected.branch}; base ${detected.candidate || 'not detected'}`));
+  await probeCodexCapabilities(resolved, options.model);
+  vscode.window.showInformationMessage(ui(
+    `Codex PR Safe 环境正常：${resolved.version}；当前分支 ${detected.branch}；Base ${detected.candidate || '需手动选择'}；CLI 能力已验证`,
+    `Codex PR Safe environment OK: ${resolved.version}; branch ${detected.branch}; base ${detected.candidate || 'manual selection required'}; CLI capabilities verified`
+  ));
 }
 
 function showError(error) {
-  const detail = error?.stderr || error?.message || String(error);
-  log(`error: ${detail}`);
+  const detail = String(error?.stderr || error?.message || error || 'Unknown error').slice(0, 4000);
+  log(`error: ${error?.code || error?.name || 'ERROR'}`);
   vscode.window.showErrorMessage(ui(`Codex PR Safe 失败：${detail}`, `Codex PR Safe failed: ${detail}`), ui('查看输出', 'Show Output')).then(choice => { if (choice) outputChannel?.show(true); });
 }
 
@@ -308,8 +346,8 @@ function activate(context) {
   outputChannel = vscode.window.createOutputChannel('Codex PR Safe');
   context.subscriptions.push(outputChannel);
   const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, (...args) => Promise.resolve(fn(args)).catch(error => {
-    if (extensionMode === vscode.ExtensionMode.Test) throw error;
     showError(error);
+    if (extensionMode === vscode.ExtensionMode.Test) throw error;
   })));
   reg('safeCodexPr.generate', args => generate({ commandArgs: args }));
   reg('safeCodexPr.regenerate', args => generate({ regenerate: true, commandArgs: args }));
@@ -333,4 +371,4 @@ function deactivate() {
   previewPanel?.dispose();
 }
 
-module.exports = { activate, deactivate, effectiveOptions, validateEditedResult, textForClipboard };
+module.exports = { activate, deactivate, effectiveOptions, validateEditedResult, textForClipboard, normalizeFsPath, ensureFreshResult };
