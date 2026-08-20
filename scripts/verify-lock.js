@@ -1,0 +1,11 @@
+'use strict';
+const fs = require('fs');
+const assert = require('assert');
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+assert.strictEqual(lock.name, pkg.name, 'package-lock name mismatch');
+assert.strictEqual(lock.version, pkg.version, 'package-lock version mismatch');
+assert.strictEqual(lock.packages?.['']?.name, pkg.name, 'package-lock root package name mismatch');
+assert.strictEqual(lock.packages?.['']?.version, pkg.version, 'package-lock root package version mismatch');
+assert.deepStrictEqual(lock.packages?.['']?.devDependencies, pkg.devDependencies, 'package-lock root devDependencies mismatch');
+console.log(`${pkg.name} ${pkg.version} lock metadata OK.`);
