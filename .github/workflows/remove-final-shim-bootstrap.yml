@@ -30,6 +30,16 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: node scripts/remove-final-shim.js
+      - name: Ensure Linux Extension Host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v xvfb-run >/dev/null 2>&1 && ldconfig -p | grep -q 'libgtk-3.so' && ldconfig -p | grep -q 'libnss3.so'; then
+            echo 'Extension Host dependencies already available.'
+          else
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2
+          fi
       - name: Verify terminal product
         shell: bash
         run: |
@@ -38,7 +48,7 @@ jobs:
           node scripts/safe-core.js verify
           node scripts/safe-core.js upstream
           npm run check
-          npm run test:integration
+          xvfb-run -a npm run test:integration
           npm run package
       - name: Remove one-shot bootstrap
         run: rm scripts/remove-final-shim.js .github/workflows/remove-final-shim-bootstrap.yml .remove-final-shim-trigger
