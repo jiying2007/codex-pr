@@ -2,7 +2,7 @@
 
 const { runPreparedProcess } = require('./process');
 const { buildPrompt, outputSchema, buildCodexInput, validateStructuredResult } = require('./core');
-const { isCliCompatibilityError } = require('./safe-contract');
+const { isCliCompatibilityError } = require('./codex-safe-core/safe-contract');
 const { createCodexCli } = require('./codex-safe-core/codex-cli');
 
 const capabilityCache = new Map();
