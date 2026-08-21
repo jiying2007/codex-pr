@@ -10,9 +10,14 @@ function run(command, args, cwd) {
   cp.execFileSync(command, args, { cwd, stdio: 'inherit' });
 }
 
+function initMainRepository(root) {
+  run('git', ['init'], root);
+  run('git', ['symbolic-ref', 'HEAD', 'refs/heads/main'], root);
+}
+
 function createWorkspace() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-pr-safe-integration-'));
-  run('git', ['init', '-b', 'main'], root);
+  initMainRepository(root);
   run('git', ['config', 'user.email', 'codex-pr-safe@example.invalid'], root);
   run('git', ['config', 'user.name', 'Codex PR Safe Test'], root);
   fs.mkdirSync(path.join(root, '.github'));

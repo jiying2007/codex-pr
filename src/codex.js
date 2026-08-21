@@ -5,6 +5,12 @@ const os = require('os');
 const path = require('path');
 const { runProcess, runPreparedProcess } = require('./process');
 const { buildPrompt, outputSchema, buildCodexArgs, buildCodexInput, parseCodexJsonl, validateStructuredResult } = require('./core');
+const {
+  REQUIRED_CODEX_TOP_LEVEL_FLAGS,
+  REQUIRED_CODEX_EXEC_FLAGS,
+  missingHelpFlags,
+  isCliCompatibilityError
+} = require('./safe-contract');
 
 const capabilityCache = new Map();
 
@@ -75,13 +81,9 @@ async function probeCodexCapabilities(resolved, model = '') {
   }
 
   const missing = [];
-  if (!helpHas(topHelp, '--ask-for-approval')) missing.push('top-level --ask-for-approval');
-  for (const flag of ['--json', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules', '--sandbox', '--output-schema']) {
-    if (!helpHas(execHelp, flag)) missing.push(`exec ${flag}`);
-  }
-  const combined = `${topHelp}\n${execHelp}`;
-  if (!helpHas(combined, '--config')) missing.push('--config');
-  if (model && !helpHas(combined, '--model')) missing.push('--model');
+  missing.push(...missingHelpFlags(topHelp, REQUIRED_CODEX_TOP_LEVEL_FLAGS).map(flag => `top-level ${flag}`));
+  missing.push(...missingHelpFlags(execHelp, REQUIRED_CODEX_EXEC_FLAGS).map(flag => `exec ${flag}`));
+  if (model && !helpHas(`${topHelp}\n${execHelp}`, '--model')) missing.push('--model');
 
   if (missing.length) {
     const error = new Error(`Codex CLI ${resolved.version} does not expose required capabilities: ${missing.join(', ')}.`);
@@ -92,11 +94,6 @@ async function probeCodexCapabilities(resolved, model = '') {
   const result = { ...resolved, capabilitiesVerified: true };
   capabilityCache.set(cacheKey, result);
   return result;
-}
-
-function isCliCompatibilityError(error) {
-  const text = `${error?.stderr || ''}\n${error?.stdout || ''}\n${error?.message || ''}`.toLowerCase();
-  return text.includes('unexpected argument') || text.includes('unknown argument') || text.includes('unrecognized option') || text.includes('unknown option');
 }
 
 async function withTemporaryDirectory(fn) {

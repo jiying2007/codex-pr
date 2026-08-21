@@ -32,5 +32,8 @@
   "Copy Body": "Copy Body",
   "Regenerate": "Regenerate",
   "Change Base": "Change Base",
-  "Open GitHub PR": "Open GitHub PR"
+  "Open GitHub PR": "Open GitHub PR",
+  "Codex Review Safe receipts match {0}/{1} commits; this is not human approval or proof that tests passed.": "Codex Review Safe receipts match {0}/{1} commits; this is not human approval or proof that tests passed.",
+  "No Codex Review Safe commit evidence is available; PR generation remains unblocked.": "No Codex Review Safe commit evidence is available; PR generation remains unblocked.",
+  "HEAD or base changed while the PR preview was being prepared. The result was discarded.": "HEAD or base changed while the PR preview was being prepared. The result was discarded."
 }

@@ -53,6 +53,8 @@ Codex output must match a closed JSON Schema and is validated again locally. Sum
 
 Codex PR Safe does not ingest a verified test-run result. Therefore test execution status is not model-controlled: the Testing section is generated locally and explicitly states that execution was not verified by Codex PR Safe.
 
+If Codex Review Safe is installed, PR may query its read-only Extension API and match receipts to first-parent commits by parent OID and committed-diff fingerprint. The deterministic Review Evidence section always states that AI receipts are not human approval and do not establish requirements, build, or test readiness. Missing or invalid companion evidence never enables additional Git or network actions.
+
 ## Process handling
 
 Native executables are started without a shell. On Windows, `.cmd` and `.bat` shims are invoked through `cmd.exe` with explicit quoting and `windowsVerbatimArguments`.

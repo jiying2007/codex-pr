@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('path');
+const { buildSafeCodexArgs, validateReviewReceipt } = require('./safe-contract');
 
 const RISK_LEVELS = new Set(['low', 'medium', 'high']);
 const PROJECT_RULES_FILE = '.codex-pr.json';
@@ -255,10 +256,51 @@ function formatPullRequest(result, options, meta = {}) {
     `- ${zh ? '破坏性变更' : 'Breaking change'}: ${result.breakingChange ? (zh ? '是' : 'Yes') : (zh ? '否' : 'No')}`
   ];
   if (result.reviewNotes.length) lines.push('', section(zh ? 'Review 重点' : 'Review Notes', result.reviewNotes));
+  if (meta.reviewEvidence?.status === 'available') {
+    const evidence = meta.reviewEvidence;
+    const reviewItems = [
+      zh
+        ? `Codex Review Safe 凭据匹配 ${evidence.reviewedCommits}/${evidence.totalCommits} 个 first-parent 提交。`
+        : `Codex Review Safe receipts match ${evidence.reviewedCommits}/${evidence.totalCommits} first-parent commits.`,
+      zh
+        ? 'AI 审查凭据不等于人工批准；需求、构建和测试仍需独立证据。'
+        : 'AI review receipts are not human approval; requirements, builds, and tests still need independent evidence.'
+    ];
+    if (evidence.blockedCommits > 0) {
+      reviewItems.unshift(zh
+        ? `${evidence.blockedCommits} 个匹配提交包含阻断级审查发现。`
+        : `${evidence.blockedCommits} matched commits contain blocking review findings.`);
+    }
+    lines.push('', section(zh ? '审查证据' : 'Review Evidence', reviewItems));
+  }
   if (meta.baseRef || meta.headBranch) lines.push('', '---', `${zh ? '比较范围' : 'Compare'}: \`${meta.baseRef || '?'}...${meta.headBranch || 'HEAD'}\``);
   const body = lines.join('\n').trim();
   if (body.length > options.maxBodyChars) throw new Error(`Generated PR body is too long (${body.length} characters).`);
   return { title, body };
+}
+
+function normalizeReviewRangeEvidence(result) {
+  if (!result || result.kind !== 'codex-review-range-evidence') {
+    return { status: 'invalid', totalCommits: 0, reviewedCommits: 0, blockedCommits: 0 };
+  }
+  const matches = Array.isArray(result.matches)
+    ? result.matches.filter(item => typeof item?.commitOid === 'string' && validateReviewReceipt(item.receipt))
+    : [];
+  const totalCommits = Number(result.totalCommits);
+  const reviewedCommits = Number(result.reviewedCommits);
+  const blockedCommits = Number(result.blockedCommits);
+  if (
+    ![totalCommits, reviewedCommits, blockedCommits].every(Number.isInteger) ||
+    totalCommits < 0 ||
+    reviewedCommits < 0 ||
+    blockedCommits < 0 ||
+    reviewedCommits !== matches.length ||
+    reviewedCommits > totalCommits ||
+    blockedCommits > reviewedCommits
+  ) {
+    return { status: 'invalid', totalCommits: 0, reviewedCommits: 0, blockedCommits: 0 };
+  }
+  return { status: 'available', totalCommits, reviewedCommits, blockedCommits };
 }
 
 function parseCodexJsonl(stdout) {
@@ -278,31 +320,7 @@ function parseCodexJsonl(stdout) {
 }
 
 function buildCodexArgs(schemaPath, model) {
-  const args = [
-    '--ask-for-approval', 'never',
-    'exec',
-    '--json',
-    '--ephemeral',
-    '--skip-git-repo-check',
-    '--ignore-user-config',
-    '--ignore-rules',
-    '--sandbox', 'read-only',
-    '--output-schema', schemaPath,
-    '--config', 'web_search="disabled"',
-    '--config', 'features.shell_tool=false',
-    '--config', 'features.unified_exec=false',
-    '--config', 'features.shell_snapshot=false',
-    '--config', 'features.apps=false',
-    '--config', 'features.multi_agent=false',
-    '--config', 'features.remote_plugin=false',
-    '--config', 'features.hooks=false',
-    '--config', 'features.goals=false',
-    '--config', 'features.memories=false',
-    '--config', 'features.skill_mcp_dependency_install=false'
-  ];
-  if (model) args.push('--model', model);
-  args.push('-');
-  return args;
+  return buildSafeCodexArgs(schemaPath, model);
 }
 
 function snapshotEqual(a, b) {
@@ -375,6 +393,7 @@ module.exports = {
   validateStructuredResult,
   normalizeTitle,
   formatPullRequest,
+  normalizeReviewRangeEvidence,
   parseCodexJsonl,
   buildCodexArgs,
   snapshotEqual,

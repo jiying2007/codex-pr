@@ -32,5 +32,8 @@
   "Copy Body": "复制正文",
   "Regenerate": "重新生成",
   "Change Base": "更换 Base",
-  "Open GitHub PR": "打开 GitHub PR"
+  "Open GitHub PR": "打开 GitHub PR",
+  "Codex Review Safe receipts match {0}/{1} commits; this is not human approval or proof that tests passed.": "Codex Review Safe 凭据匹配 {0}/{1} 个提交；这不等于人工批准或测试通过。",
+  "No Codex Review Safe commit evidence is available; PR generation remains unblocked.": "没有可用的 Codex Review Safe 提交凭据；PR 生成不会因此被阻断。",
+  "HEAD or base changed while the PR preview was being prepared. The result was discarded.": "生成 PR 预览期间 HEAD 或 Base 已变化，结果已丢弃。"
 }

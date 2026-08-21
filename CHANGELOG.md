@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Support test repositories on Git versions that predate `git init -b`.
+- Consume matching Codex Review Safe receipts for committed first-parent ranges without treating AI review as human approval or test evidence.
+- Use the versioned Codex Safe argv/compatibility contract shared with Commit and Review.
+- Add offline quality fixtures for deterministic evidence-boundary behavior.
+
 ## 1.0.2
 
 - Align English/Simplified-Chinese README navigation and product-family naming with Codex Commit Safe and Codex Review Safe.

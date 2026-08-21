@@ -10,6 +10,7 @@ const {
   validateProjectRulesObject,
   normalizeRef,
   formatPullRequest,
+  normalizeReviewRangeEvidence,
   snapshotEqual,
   buildGitHubCompareUrl,
   repoLabel
@@ -32,6 +33,7 @@ let previewMessageDisposable;
 const lastByRepo = new Map();
 const activeGenerations = new Map();
 let nextGenerationId = 1;
+const REVIEW_EXTENSION_ID = 'jiying2007.codex-review-safe';
 
 function formatLocalized(message, args = []) {
   return String(message).replace(/\{(\d+)\}/g, (_match, index) =>
@@ -53,6 +55,20 @@ function log(message) { outputChannel?.appendLine(`[${new Date().toISOString()}]
 
 function assertTrustedWorkspace() {
   if (!vscode.workspace.isTrusted) throw new Error(ui('当前工作区处于 Restricted Mode。请先信任工作区。', 'The workspace is in Restricted Mode. Trust the workspace first.'));
+}
+
+async function getReviewEvidence(root, baseRef, headOid, token) {
+  try {
+    const extension = vscode.extensions.getExtension(REVIEW_EXTENSION_ID);
+    if (!extension) return { status: 'unavailable', totalCommits: 0, reviewedCommits: 0, blockedCommits: 0 };
+    const api = extension.isActive ? extension.exports : await extension.activate();
+    if (typeof api?.getReviewEvidenceForRange !== 'function') return { status: 'unsupported', totalCommits: 0, reviewedCommits: 0, blockedCommits: 0 };
+    const result = await api.getReviewEvidenceForRange(root, baseRef, headOid, token);
+    return normalizeReviewRangeEvidence(result);
+  } catch (error) {
+    if (error?.code === 'ECANCELLED') throw error;
+    return { status: 'error', totalCommits: 0, reviewedCommits: 0, blockedCommits: 0 };
+  }
 }
 
 function getUserOnlySetting(config, key, fallback) {
@@ -168,7 +184,7 @@ function linkCancellation(externalToken, internalSource) {
   return externalToken.onCancellationRequested(() => internalSource.cancel());
 }
 
-async function buildPreviewState(root, baseRef, context, structured, formatted, codexVersion, token) {
+async function buildPreviewState(root, baseRef, context, structured, formatted, codexVersion, reviewEvidence, token) {
   const gh = await resolveGitHubOpenContext(root, baseRef, context.headBranch, token);
   const compareUrl = buildGitHubCompareUrl({ baseRemote: gh.baseRemote, baseBranch: gh.baseBranch, headRemote: gh.headRemote, headBranch: gh.headBranch });
   return {
@@ -184,6 +200,7 @@ async function buildPreviewState(root, baseRef, context, structured, formatted, 
     compareUrl,
     canOpenGitHub: Boolean(compareUrl && gh.published),
     codexVersion,
+    reviewEvidence,
     stale: false
   };
 }
@@ -294,8 +311,11 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
         const codex = await runCodex(context, options, previousStructured, token);
         const beforeUse = await repositorySnapshot(root, baseRef, token);
         if (!snapshotEqual(before, beforeUse)) throw Object.assign(new Error(ui('Codex 生成期间 HEAD 或 Base 已变化，结果已丢弃。', 'HEAD or base changed while Codex was generating. The result was discarded.')), { code: 'ESTALE' });
-        const formatted = formatPullRequest(codex.result, options, { baseRef, headBranch: context.headBranch });
-        const preview = await buildPreviewState(root, baseRef, context, codex.result, formatted, codex.codexVersion, token);
+        const reviewEvidence = await getReviewEvidence(root, baseRef, context.headOid, token);
+        const formatted = formatPullRequest(codex.result, options, { baseRef, headBranch: context.headBranch, reviewEvidence });
+        const preview = await buildPreviewState(root, baseRef, context, codex.result, formatted, codex.codexVersion, reviewEvidence, token);
+        const afterPreview = await repositorySnapshot(root, baseRef, token);
+        if (!snapshotEqual(before, afterPreview)) throw Object.assign(new Error(ui('生成 PR 预览期间 HEAD 或 Base 已变化，结果已丢弃。', 'HEAD or base changed while the PR preview was being prepared. The result was discarded.')), { code: 'ESTALE' });
         return { preview, snapshot: before };
       } finally { linked.dispose(); }
     });
@@ -385,4 +405,4 @@ function deactivate() {
   previewPanel?.dispose();
 }
 
-module.exports = { activate, deactivate, effectiveOptions, validateEditedResult, textForClipboard, normalizeFsPath, ensureFreshResult };
+module.exports = { activate, deactivate, effectiveOptions, validateEditedResult, textForClipboard, normalizeFsPath, ensureFreshResult, getReviewEvidence };

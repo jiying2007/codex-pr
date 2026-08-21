@@ -18,6 +18,7 @@ Generate safe, structured pull request titles and descriptions from **committed 
 - Deterministic Testing section: Codex PR Safe never claims tests passed without verified execution evidence
 - HEAD + Base OID snapshot checks during generation and before every Copy/Open egress action
 - HEAD-pinned `.codex-pr.json` and PR templates; uncommitted edits and repository symlinks cannot alter the request
+- Optional committed-range evidence from matching Codex Review Safe receipts, explicitly separated from human approval and test evidence
 - Windows `.exe` / `.cmd` / `.bat`, Linux, and macOS execution paths covered by CI
 - Never automatically fetches, pulls, pushes, creates, updates, or submits a remote pull request
 

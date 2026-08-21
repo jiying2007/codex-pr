@@ -20,6 +20,17 @@ function previewHtml(webview, state, ui) {
   const stale = state.stale
     ? `<div class="error">${escapeHtml(ui('HEAD 或 Base 已变化。当前结果已过期，请重新生成后再复制或打开 GitHub。', 'HEAD or base changed. This result is stale; regenerate before copying or opening GitHub.'))}</div>`
     : '';
+  const reviewEvidence = state.reviewEvidence?.status === 'available'
+    ? `<div class="notice">${escapeHtml(ui(
+      'Codex Review Safe 凭据匹配 {0}/{1} 个提交；这不等于人工批准或测试通过。',
+      'Codex Review Safe receipts match {0}/{1} commits; this is not human approval or proof that tests passed.',
+      state.reviewEvidence.reviewedCommits,
+      state.reviewEvidence.totalCommits
+    ))}</div>`
+    : `<div class="notice">${escapeHtml(ui(
+      '没有可用的 Codex Review Safe 提交凭据；PR 生成不会因此被阻断。',
+      'No Codex Review Safe commit evidence is available; PR generation remains unblocked.'
+    ))}</div>`;
   const egressDisabled = state.stale ? 'disabled' : '';
   const openDisabled = state.canOpenGitHub && !state.stale ? '' : 'disabled';
   const openHint = state.stale
@@ -47,6 +58,7 @@ function previewHtml(webview, state, ui) {
 <div class="meta">${escapeHtml(ui('比较范围', 'Compare'))}: <code>${base}...${head}</code></div>
 ${dirty}
 ${stale}
+${reviewEvidence}
 <label for="title">${escapeHtml(ui('PR 标题', 'PR Title'))}</label>
 <input id="title" maxlength="160" value="${title}">
 <label for="body">${escapeHtml(ui('PR 正文', 'PR Body'))}</label>

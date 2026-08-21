@@ -19,14 +19,20 @@ const {
   snapshotEqual,
   buildCodexInput,
   splitRemoteBranch,
-  normalizeTitle
+  normalizeTitle,
+  normalizeReviewRangeEvidence
 } = require('./src/core');
 const { prepareCommand } = require('./src/process');
 const { isForkTopology, readHeadBlob } = require('./src/git');
+const qualityCases = require('./test/quality-cases.json');
 
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 function run(command, args, cwd) { return cp.execFileSync(command, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); }
+function initMainRepository(root) {
+  run('git', ['init'], root);
+  run('git', ['symbolic-ref', 'HEAD', 'refs/heads/main'], root);
+}
 
 test('project rules reject unknown keys', () => {
   assert.throws(() => validateProjectRulesObject({ codexPath: '/tmp/evil' }), /Unsupported/);
@@ -115,9 +121,27 @@ test('structured result rejects empty summary and changes and inconsistent risk'
 });
 
 test('format PR deterministically marks test execution as unverified', () => {
-  const formatted = formatPullRequest({ title: 'Improve PR', summary: ['Purpose'], changes: ['Change'], risks: [], reviewNotes: [], riskLevel: 'low', breakingChange: false }, { language: 'en', titleMaxLength: 60, maxBodyChars: 8000 }, { baseRef: 'origin/main', headBranch: 'feature/x' });
+  const formatted = formatPullRequest({ title: 'Improve PR', summary: ['Purpose'], changes: ['Change'], risks: [], reviewNotes: [], riskLevel: 'low', breakingChange: false }, { language: 'en', titleMaxLength: 60, maxBodyChars: 8000 }, { baseRef: 'origin/main', headBranch: 'feature/x', reviewEvidence:{status:'available',totalCommits:2,reviewedCommits:1,blockedCommits:0} });
   assert.match(formatted.body, /Test execution was not verified by Codex PR Safe/);
+  assert.match(formatted.body, /receipts match 1\/2 first-parent commits/);
+  assert.match(formatted.body, /not human approval/);
   assert.match(formatted.body, /origin\/main\.\.\.feature\/x/);
+});
+
+test('quality fixtures preserve evidence boundaries', () => {
+  for (const item of qualityCases) {
+    const validated = validateStructuredResult(item.result);
+    const formatted = formatPullRequest(validated, { language: 'en', titleMaxLength: 100, maxBodyChars: 8000 }, { reviewEvidence: item.reviewEvidence });
+    for (const expected of item.expected) assert.ok(formatted.body.includes(expected), `${item.name}: ${expected}`);
+  }
+});
+
+test('review range evidence rejects malformed receipts and inconsistent counts', () => {
+  const receipt={schemaVersion:1,kind:'codex-review-safe',headOid:'1'.repeat(40),indexFingerprint:'2'.repeat(64),diffFingerprint:'3'.repeat(64),policyFingerprint:'4'.repeat(64),stagedFileCount:1,qualityVerdict:'no_findings',readinessVerdict:'needs_evidence',mechanicalGate:'not_run',createdAt:'2026-08-21T00:00:00.000Z'};
+  const valid=normalizeReviewRangeEvidence({kind:'codex-review-range-evidence',totalCommits:2,reviewedCommits:1,blockedCommits:0,matches:[{commitOid:'e',receipt}]});
+  assert.strictEqual(valid.status,'available');
+  assert.strictEqual(normalizeReviewRangeEvidence({kind:'codex-review-range-evidence',totalCommits:1,reviewedCommits:1,blockedCommits:0,matches:[]}).status,'invalid');
+  assert.strictEqual(normalizeReviewRangeEvidence({kind:'wrong'}).status,'invalid');
 });
 
 test('title truncation does not split Unicode surrogate pairs', () => {
@@ -170,7 +194,7 @@ test('Codex input marks committed boundaries, dirty exclusion, and unverified te
 test('HEAD-controlled file reader ignores working-tree edits', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-pr-head-test-'));
   try {
-    run('git', ['init', '-b', 'main'], root);
+    initMainRepository(root);
     run('git', ['config', 'user.email', 'test@example.invalid'], root);
     run('git', ['config', 'user.name', 'Test'], root);
     fs.writeFileSync(path.join(root, '.codex-pr.json'), '{"language":"en"}\n');
@@ -190,7 +214,7 @@ test('HEAD-controlled reader does not follow repository symlinks', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-pr-symlink-test-'));
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-pr-outside-'));
   try {
-    run('git', ['init', '-b', 'main'], root);
+    initMainRepository(root);
     run('git', ['config', 'user.email', 'test@example.invalid'], root);
     run('git', ['config', 'user.name', 'Test'], root);
     fs.mkdirSync(path.join(root, '.github'));

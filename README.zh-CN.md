@@ -18,6 +18,7 @@
 - Testing 状态确定性：没有可信执行证据时，Codex PR Safe 永远不会声称“测试已通过”
 - 生成期间及每一次 Copy/Open 前校验 HEAD + Base OID snapshot
 - `.codex-pr.json` 和 PR Template 固定读取 HEAD；未提交修改和仓库符号链接不能改变请求
+- 可选汇总提交范围内匹配的 Codex Review Safe 凭据，并明确与人工批准和测试证据分离
 - CI 覆盖 Windows `.exe/.cmd/.bat`、Linux、macOS
 - 永远不会自动 `fetch`、`pull`、`push`、创建 PR、更新 PR 或提交远端 PR
 
