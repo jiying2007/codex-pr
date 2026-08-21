@@ -50,9 +50,9 @@ jobs:
           npm run check
           xvfb-run -a npm run test:integration
           npm run package
-      - name: Remove one-shot bootstrap
-        run: rm scripts/remove-final-shim.js .github/workflows/remove-final-shim-bootstrap.yml .remove-final-shim-trigger
-      - name: Commit terminal product diff
+      - name: Remove non-workflow bootstrap files
+        run: rm scripts/remove-final-shim.js .remove-final-shim-trigger
+      - name: Commit validated product diff
         shell: bash
         run: |
           set -euo pipefail
