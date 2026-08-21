@@ -24,6 +24,7 @@
     "description"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:safeCodexPr.generate",
     "onCommand:safeCodexPr.regenerate",
     "onCommand:safeCodexPr.selectBaseAndGenerate",
@@ -34,7 +35,7 @@
     "onCommand:safeCodexPr.openPullRequest",
     "onCommand:safeCodexPr.checkEnvironment"
   ],
-  "main": "./extension.js",
+  "main": "./bootstrap.js",
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
@@ -238,12 +239,15 @@
     }
   },
   "scripts": {
-    "check": "node --check extension.js && node --check src/core.js && node --check src/process.js && node --check src/git.js && node --check src/codex.js && node --check src/preview.js && node --check src/safe-contract.js && node --check scripts/release.js && node --check scripts/hardening.test.js && node scripts/release.test.js && node scripts/hardening.test.js && npm run verify:l10n && node test.js",
+    "check": "node --check bootstrap.js && node --check extension.js && node --check src/core.js && node --check src/process.js && node --check src/git.js && node --check src/codex.js && node --check src/preview.js && node --check src/safe-contract.js && node --check src/codex-safe-core/safe-contract.js && node --check src/codex-safe-core/codex-cli.js && node --check src/github-pr-provider.js && node --check scripts/safe-core.js && node --check scripts/github-pr-provider.test.js && node --check scripts/release.js && node --check scripts/hardening.test.js && node scripts/safe-core.js verify && node scripts/github-pr-provider.test.js && node scripts/release.test.js && node scripts/hardening.test.js && npm run verify:l10n && node test.js",
     "test:unit": "node test.js",
     "test:integration": "node ./test/integration/runTest.js",
     "test": "npm run test:unit",
     "package": "vsce package --no-dependencies",
     "verify:lock": "node ./scripts/verify-lock.js",
+    "safe-core:verify": "node ./scripts/safe-core.js verify",
+    "safe-core:upstream": "node ./scripts/safe-core.js upstream",
+    "safe-core:sync": "node ./scripts/safe-core.js sync",
     "release:prepare": "node ./scripts/release.js prepare",
     "release:check": "node ./scripts/release.js check",
     "release:push": "node ./scripts/release.js push",
