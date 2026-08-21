@@ -43,6 +43,22 @@ if (!pkg.scripts.check.includes('node --check src/codex-safe-core/safe-contract.
 if (pkg.scripts.check.includes('src/safe-contract.js')) fail('Legacy wrapper check remains in package.json');
 write('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
 
+for (const workflow of ['.github/workflows/ci.yml', '.github/workflows/release.yml']) {
+  let text = read(workflow);
+  const legacy = "          grep -Fx 'extension/src/safe-contract.js' /tmp/vsix-files.txt\n";
+  if (!text.includes(legacy)) fail(`legacy shim package check not found in ${workflow}`);
+  text = text.replace(legacy,
+    "          grep -Fx 'extension/src/codex-safe-core/safe-contract.js' /tmp/vsix-files.txt\n" +
+    "          grep -Fx 'extension/src/codex-safe-core/codex-cli.js' /tmp/vsix-files.txt\n" +
+    "          grep -Fx 'extension/src/codex-safe-core/manifest.json' /tmp/vsix-files.txt\n");
+  write(workflow, text);
+}
+
+let publishing = read('PUBLISHING.md');
+if (!publishing.includes('- `src/safe-contract.js`\n')) fail('legacy shim package documentation not found');
+publishing = publishing.replace('- `src/safe-contract.js`\n', '- `src/codex-safe-core/safe-contract.js`\n- `src/codex-safe-core/codex-cli.js`\n- `src/codex-safe-core/manifest.json`\n');
+write('PUBLISHING.md', publishing);
+
 const manifest = JSON.parse(read('src/codex-safe-core/manifest.json'));
 manifest.source.ref = 'main';
 const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
@@ -63,6 +79,9 @@ const scan = ['bootstrap.js', 'extension.js', 'test.js', ...fs.readdirSync(path.
 for (const file of scan) {
   const text = read(file);
   if (text.includes("require('./safe-contract')") || text.includes('src/safe-contract')) fail(`Transition wrapper reference remains in ${file}`);
+}
+for (const file of ['package.json', '.github/workflows/ci.yml', '.github/workflows/release.yml', 'PUBLISHING.md']) {
+  if (read(file).includes('src/safe-contract.js')) fail(`Legacy packaged shim reference remains in ${file}`);
 }
 if (read('safe-core.lock.json').includes('safe-core-v1')) fail('legacy Safe Core branch remains');
 console.log('Codex PR Safe transition residue removed.');
