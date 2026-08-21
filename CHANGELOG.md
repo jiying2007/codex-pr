@@ -3,6 +3,11 @@
 ## Unreleased
 
 - Add a cross-platform local release CLI that prepares versions, enforces release gates, pushes `main`, and verifies the automated GitHub Release without creating local tags.
+- Treat current branch identity as part of PR freshness so switching to another branch at the same commit cannot reuse a stale preview or GitHub target.
+- Enforce configured `titleMaxLength` / `maxBodyChars` on edited preview output, while keeping Unicode title counting consistent with local validation.
+- Harden the preview Webview with no local resource roots, nonce-only script/style CSP, lightweight `getState` / `setState` draft restoration, and no `retainContextWhenHidden` memory retention.
+- Recheck repository freshness after GitHub remote resolution before opening the compare page, and keep Regenerate / Change Base available even when the current draft is invalid.
+- Add a dedicated hardening regression gate for stale identity, preview limits, CSP, Webview lifecycle, and egress checks.
 
 ## 1.0.3
 
