@@ -21,20 +21,22 @@ const html = previewHtml(
     titleMaxLength: 88,
     maxBodyChars: 7000,
     localDirty: false,
-    stale: false,
+    stale: true,
     canOpenGitHub: true,
     reviewEvidence: { status: 'unavailable' }
   },
   ui
 );
 
-assert.match(html, /maxlength="88"/);
+assert.match(html, /const titleMaxLength = 88;/);
+assert.doesNotMatch(html, /id="title" maxlength=/);
 assert.match(html, /maxlength="7000"/);
+assert.match(html, /Array\.from\(value\)\.length/);
 assert.match(html, /vscode\.getState\(\)/);
 assert.match(html, /vscode\.setState\(/);
 assert.match(html, /style-src 'nonce-[a-f0-9]+'/);
 assert.doesNotMatch(html, /unsafe-inline/);
-assert.match(html, /HEAD, current branch, or base changed|current branch/);
+assert.match(html, /HEAD, current branch, or base changed/);
 
 const extension = fs.readFileSync(path.join(__dirname, '..', 'extension.js'), 'utf8');
 assert.match(extension, /currentBranch/);
