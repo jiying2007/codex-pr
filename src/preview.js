@@ -63,7 +63,7 @@ ${dirty}
 ${stale}
 ${reviewEvidence}
 <label for="title">${escapeHtml(ui('PR 标题', 'PR Title'))}</label>
-<input id="title" maxlength="${titleMaxLength}" value="${title}">
+<input id="title" value="${title}">
 <div class="limit" id="titleLimit"></div>
 <label for="body">${escapeHtml(ui('PR 正文', 'PR Body'))}</label>
 <textarea id="body" maxlength="${maxBodyChars}">${body}</textarea>
