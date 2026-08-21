@@ -1,14 +1,21 @@
 name: Remove Final Shim Bootstrap
+
 on:
   push:
     branches: [cleanup/remove-final-shim]
+  pull_request:
+    branches: [main]
+
 permissions:
   contents: write
+
 concurrency:
-  group: remove-final-shim-${{ github.ref }}
+  group: remove-final-shim-${{ github.event.pull_request.head.ref || github.ref }}
   cancel-in-progress: true
+
 jobs:
   finalize:
+    if: github.event_name == 'push' || github.head_ref == 'cleanup/remove-final-shim'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
