@@ -27,17 +27,35 @@ Repository `.codex-pr.json` is treated as repository-controlled policy and is re
 
 PR templates are also read from committed `HEAD`. Git symbolic-link entries are not followed, preventing repository-controlled paths from escaping to host filesystem content.
 
+Configured `titleMaxLength` and `maxBodyChars` limits are enforced again after preview editing, before any Copy/Open egress action. The browser preview shows the effective limits, but the extension-host validation remains authoritative; title length uses Unicode code points so surrogate pairs are not miscounted by HTML `maxlength` semantics.
+
 ## Repository consistency
 
-A generated PR must describe the exact committed state that was analyzed. The extension snapshots:
+A generated PR must describe the exact committed state and branch identity that were analyzed. The extension snapshots:
 
 - the current `HEAD` object ID;
+- the current local branch name;
 - the selected Base object ID; and
 - the normalized Base ref.
 
-The snapshot is checked before and after PR input collection, after Codex returns, and again before every Copy/Open egress action. Any mismatch fails safe. A stale preview disables Copy/Open until regeneration.
+The identity is checked before and after PR input collection, after Codex returns, after preview preparation, and again before every Copy/Open egress action. GitHub Open performs another check after remote/publish resolution immediately before copying and opening the compare page. Any mismatch fails safe. A stale preview disables Copy/Open until regeneration.
 
-A newer generation request supersedes an older in-flight request for the same repository.
+Including the branch name prevents a checkout to a different branch that happens to point at the same commit from reusing a preview whose compare range or push target belongs to the previous branch.
+
+A newer generation request supersedes an older in-flight request for the same repository. Regenerate and Change Base remain available even if the current edited draft fails title/body validation so the user can recover without exporting invalid content.
+
+## Preview Webview boundary
+
+The editable preview is intentionally isolated:
+
+- scripts are enabled only because the preview needs local button/edit interactions;
+- `localResourceRoots` is empty, so the Webview cannot load extension/workspace files as local resources;
+- the Content Security Policy defaults to no sources and permits only nonce-authorized inline style/script blocks;
+- `retainContextWhenHidden` is not used;
+- small title/body draft state is preserved with VS Code Webview `getState` / `setState` instead of keeping the full hidden Webview context alive; and
+- all edited title/body data is validated again in the extension host before clipboard or browser egress.
+
+A fresh render uses a new draft identity, so a regenerated PR cannot be overwritten by draft state saved for the previous render.
 
 ## Base and remote safety
 
@@ -90,7 +108,7 @@ The release gate runs:
 
 - lockfile integrity verification;
 - manifest/runtime localization parity and runtime source-key coverage;
-- unit/regression tests;
+- unit/regression tests, including dedicated stale-identity and Webview-hardening checks;
 - latest VS Code Extension Host tests on Linux, Windows, and macOS;
 - minimum supported VS Code `1.90.0` compatibility testing;
 - Simplified-Chinese localization smoke testing;

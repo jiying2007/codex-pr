@@ -9,16 +9,19 @@ function nonce() {
 
 function previewHtml(webview, state, ui) {
   const n = nonce();
-  const csp = `default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${n}';`;
+  const draftKey = nonce();
+  const csp = `default-src 'none'; style-src 'nonce-${n}'; script-src 'nonce-${n}';`;
   const title = escapeHtml(state.title || '');
   const body = escapeHtml(state.body || '');
   const base = escapeHtml(state.baseRef || '');
   const head = escapeHtml(state.headBranch || '');
+  const titleMaxLength = Math.min(160, Math.max(1, Number(state.titleMaxLength) || 160));
+  const maxBodyChars = Math.min(20000, Math.max(1, Number(state.maxBodyChars) || 20000));
   const dirty = state.localDirty
     ? `<div class="notice">${escapeHtml(ui('本地未提交/暂存改动未包含在 PR 分析中。', 'Local uncommitted/staged changes are excluded from this PR analysis.'))}</div>`
     : '';
   const stale = state.stale
-    ? `<div class="error">${escapeHtml(ui('HEAD 或 Base 已变化。当前结果已过期，请重新生成后再复制或打开 GitHub。', 'HEAD or base changed. This result is stale; regenerate before copying or opening GitHub.'))}</div>`
+    ? `<div class="error">${escapeHtml(ui('HEAD、当前分支或 Base 已变化。当前结果已过期，请重新生成后再复制或打开 GitHub。', 'HEAD, current branch, or base changed. This result is stale; regenerate before copying or opening GitHub.'))}</div>`
     : '';
   const reviewEvidence = state.reviewEvidence?.status === 'available'
     ? `<div class="notice">${escapeHtml(ui(
@@ -46,11 +49,11 @@ function previewHtml(webview, state, ui) {
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Codex PR Safe</title>
-<style>
+<style nonce="${n}">
   body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:20px;max-width:1100px;margin:auto}
   .meta{color:var(--vscode-descriptionForeground);margin-bottom:14px}.notice,.error{padding:10px;border-left:3px solid var(--vscode-editorWarning-foreground);background:var(--vscode-textBlockQuote-background);margin:10px 0}.error{border-left-color:var(--vscode-errorForeground);color:var(--vscode-errorForeground)}
   label{display:block;font-weight:600;margin:14px 0 6px}input,textarea{width:100%;box-sizing:border-box;color:var(--vscode-input-foreground);background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);padding:8px;font-family:var(--vscode-editor-font-family);font-size:var(--vscode-editor-font-size)}
-  textarea{min-height:430px;resize:vertical;line-height:1.45}.buttons{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.buttons button{border:0;padding:7px 12px;color:var(--vscode-button-foreground);background:var(--vscode-button-background);cursor:pointer}.buttons button:hover{background:var(--vscode-button-hoverBackground)}.buttons button.secondary{color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground)}.buttons button:disabled{opacity:.45;cursor:not-allowed}.hint{color:var(--vscode-descriptionForeground);font-size:.9em}
+  textarea{min-height:430px;resize:vertical;line-height:1.45}.buttons{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.buttons button{border:0;padding:7px 12px;color:var(--vscode-button-foreground);background:var(--vscode-button-background);cursor:pointer}.buttons button:hover{background:var(--vscode-button-hoverBackground)}.buttons button.secondary{color:var(--vscode-button-secondaryForeground);background:var(--vscode-button-secondaryBackground)}.buttons button:disabled{opacity:.45;cursor:not-allowed}.hint,.limit{color:var(--vscode-descriptionForeground);font-size:.9em}.limit{margin-top:4px;text-align:right}
 </style>
 </head>
 <body>
@@ -60,9 +63,11 @@ ${dirty}
 ${stale}
 ${reviewEvidence}
 <label for="title">${escapeHtml(ui('PR 标题', 'PR Title'))}</label>
-<input id="title" maxlength="160" value="${title}">
+<input id="title" value="${title}">
+<div class="limit" id="titleLimit"></div>
 <label for="body">${escapeHtml(ui('PR 正文', 'PR Body'))}</label>
-<textarea id="body">${body}</textarea>
+<textarea id="body" maxlength="${maxBodyChars}">${body}</textarea>
+<div class="limit" id="bodyLimit"></div>
 <div class="buttons">
   <button id="copyAll" ${egressDisabled}>${escapeHtml(ui('复制全部', 'Copy All'))}</button>
   <button id="copyTitle" class="secondary" ${egressDisabled}>${escapeHtml(ui('复制标题', 'Copy Title'))}</button>
@@ -74,9 +79,28 @@ ${reviewEvidence}
 <div class="hint">${escapeHtml(openHint)}</div>
 <script nonce="${n}">
   const vscode = acquireVsCodeApi();
+  const draftKey = ${JSON.stringify(draftKey)};
+  const titleMaxLength = ${titleMaxLength};
+  const maxBodyChars = ${maxBodyChars};
   const title = document.getElementById('title');
   const body = document.getElementById('body');
+  const titleLimit = document.getElementById('titleLimit');
+  const bodyLimit = document.getElementById('bodyLimit');
+  const saved = vscode.getState();
+  if (saved && saved.draftKey === draftKey) {
+    if (typeof saved.title === 'string') title.value = saved.title;
+    if (typeof saved.body === 'string') body.value = saved.body;
+  }
+  function unicodeLength(value){ return Array.from(value).length; }
+  function updateLimits(){
+    titleLimit.textContent = unicodeLength(title.value) + ' / ' + titleMaxLength;
+    bodyLimit.textContent = body.value.length + ' / ' + maxBodyChars;
+  }
+  function saveDraft(){ vscode.setState({ draftKey, title: title.value, body: body.value }); updateLimits(); }
   function payload(type){ return { type, title: title.value, body: body.value }; }
+  title.addEventListener('input', saveDraft);
+  body.addEventListener('input', saveDraft);
+  updateLimits();
   document.getElementById('copyAll').addEventListener('click',()=>vscode.postMessage(payload('copyAll')));
   document.getElementById('copyTitle').addEventListener('click',()=>vscode.postMessage(payload('copyTitle')));
   document.getElementById('copyBody').addEventListener('click',()=>vscode.postMessage(payload('copyBody')));
