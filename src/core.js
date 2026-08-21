@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { buildSafeCodexArgs, validateReviewReceipt } = require('./safe-contract');
+const { buildSafeCodexArgs, validateReviewReceipt } = require('./codex-safe-core/safe-contract');
 
 const RISK_LEVELS = new Set(['low', 'medium', 'high']);
 const PROJECT_RULES_FILE = '.codex-pr.json';

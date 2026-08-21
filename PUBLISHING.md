@@ -86,7 +86,9 @@ The release gate requires these user-facing files inside the VSIX:
 - `README.zh-CN.md`
 - `images/icon.png`
 - `src/core.js`
-- `src/safe-contract.js`
+- `src/codex-safe-core/codex-cli.js`
+- `src/codex-safe-core/safe-contract.js`
+- `src/codex-safe-core/manifest.json`
 
 Development-only content must not be shipped, including:
 
