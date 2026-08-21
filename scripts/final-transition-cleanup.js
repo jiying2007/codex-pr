@@ -5,10 +5,11 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
 const write = (p, v) => fs.writeFileSync(path.join(root, p), v);
+const fail = message => { throw new Error(message); };
 
-for (const file of ['bootstrap.js', 'extension.js', 'src/codex.js', 'test.js']) {
+function rewrite(file) {
   const full = path.join(root, file);
-  if (!fs.existsSync(full)) continue;
+  if (!fs.existsSync(full)) return;
   let text = fs.readFileSync(full, 'utf8');
   text = text.replaceAll("require('./src/safe-contract')", "require('./src/codex-safe-core/safe-contract')");
   text = text.replaceAll("require('./safe-contract')", "require('./codex-safe-core/safe-contract')");
@@ -16,12 +17,30 @@ for (const file of ['bootstrap.js', 'extension.js', 'src/codex.js', 'test.js']) 
   fs.writeFileSync(full, text);
 }
 
-fs.unlinkSync(path.join(root, 'src', 'safe-contract.js'));
+for (const file of ['bootstrap.js', 'extension.js', 'test.js']) rewrite(file);
+for (const dir of ['src', 'test', 'scripts']) {
+  const base = path.join(root, dir);
+  if (!fs.existsSync(base)) continue;
+  const visit = current => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) visit(full);
+      else if (entry.name.endsWith('.js')) rewrite(path.relative(root, full));
+    }
+  };
+  visit(base);
+}
+
+const wrapper = path.join(root, 'src', 'safe-contract.js');
+if (!fs.existsSync(wrapper)) fail('Missing transition wrapper src/safe-contract.js');
+fs.unlinkSync(wrapper);
+
 const pkg = JSON.parse(read('package.json'));
 pkg.scripts.check = String(pkg.scripts.check).replace('node --check src/safe-contract.js && ', '');
 if (!pkg.scripts.check.includes('node --check src/codex-safe-core/safe-contract.js')) {
   pkg.scripts.check = pkg.scripts.check.replace('node --check src/codex.js && ', 'node --check src/codex.js && node --check src/codex-safe-core/safe-contract.js && node --check src/codex-safe-core/codex-cli.js && ');
 }
+if (pkg.scripts.check.includes('src/safe-contract.js')) fail('Legacy wrapper check remains in package.json');
 write('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
 
 const manifest = JSON.parse(read('src/codex-safe-core/manifest.json'));
@@ -29,6 +48,10 @@ manifest.source.ref = 'main';
 const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
 write('src/codex-safe-core/manifest.json', manifestText);
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
+for (const [name, expected] of Object.entries(manifest.files || {})) {
+  const actual = sha256(fs.readFileSync(path.join(root, 'src', 'codex-safe-core', name)));
+  if (actual !== expected) fail(`Safe Core runtime hash mismatch: ${name}`);
+}
 const lock = JSON.parse(read('safe-core.lock.json'));
 lock.source = { ...manifest.source };
 lock.safeCoreVersion = manifest.safeCoreVersion;
@@ -36,6 +59,10 @@ lock.manifestSha256 = sha256(Buffer.from(manifestText, 'utf8'));
 lock.files = { ...manifest.files };
 write('safe-core.lock.json', `${JSON.stringify(lock, null, 2)}\n`);
 
-if (read('src/codex.js').includes("require('./safe-contract')")) throw new Error('legacy Safe Contract import remains');
-if (read('safe-core.lock.json').includes('safe-core-v1')) throw new Error('legacy Safe Core branch remains');
+const scan = ['bootstrap.js', 'extension.js', 'test.js', ...fs.readdirSync(path.join(root, 'src')).filter(name => name.endsWith('.js')).map(name => `src/${name}`)];
+for (const file of scan) {
+  const text = read(file);
+  if (text.includes("require('./safe-contract')") || text.includes('src/safe-contract')) fail(`Transition wrapper reference remains in ${file}`);
+}
+if (read('safe-core.lock.json').includes('safe-core-v1')) fail('legacy Safe Core branch remains');
 console.log('Codex PR Safe transition residue removed.');
