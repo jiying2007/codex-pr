@@ -50,19 +50,6 @@ if (!pkg.scripts.check.includes('node --check src/codex-safe-core/safe-contract.
 if (pkg.scripts.check.includes('src/safe-contract.js')) fail('package check still references shim');
 write('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
 
-const canonicalPackageChecks = [
-  "          grep -Fx 'extension/src/codex-safe-core/codex-cli.js' /tmp/vsix-files.txt",
-  "          grep -Fx 'extension/src/codex-safe-core/safe-contract.js' /tmp/vsix-files.txt",
-  "          grep -Fx 'extension/src/codex-safe-core/manifest.json' /tmp/vsix-files.txt"
-].join('\n');
-for (const workflow of ['.github/workflows/ci.yml', '.github/workflows/release.yml']) {
-  if (!exists(workflow)) continue;
-  let text = read(workflow);
-  text = text.replace("          grep -Fx 'extension/src/safe-contract.js' /tmp/vsix-files.txt", canonicalPackageChecks);
-  if (text.includes('extension/src/safe-contract.js')) fail(`${workflow} still requires shim`);
-  write(workflow, text);
-}
-
 if (exists('PUBLISHING.md')) {
   let publishing = read('PUBLISHING.md');
   publishing = publishing.replace(
@@ -73,9 +60,7 @@ if (exists('PUBLISHING.md')) {
   write('PUBLISHING.md', publishing);
 }
 
-for (const rel of ['scripts/final-transition-cleanup.js', '.github/workflows/final-transition-cleanup.yml']) {
-  if (exists(rel)) fs.unlinkSync(p(rel));
-}
+if (exists('scripts/final-transition-cleanup.js')) fs.unlinkSync(p('scripts/final-transition-cleanup.js'));
 
 if (exists('src/safe-contract.js')) fail('shim remains');
 for (const rel of ['bootstrap.js', 'extension.js', 'src/codex.js', 'package.json']) {
@@ -85,10 +70,6 @@ for (const rel of ['bootstrap.js', 'extension.js', 'src/codex.js', 'package.json
     fail(`legacy reference remains in ${rel}`);
   }
 }
-
 const canonicalCli = read('src/codex-safe-core/codex-cli.js');
-if (!canonicalCli.includes("require('./safe-contract')")) {
-  fail('canonical Safe Core internal contract import was modified');
-}
-
+if (!canonicalCli.includes("require('./safe-contract')")) fail('canonical Safe Core internal contract import was modified');
 console.log('Final PR shim residue removed without modifying canonical Safe Core bytes.');
