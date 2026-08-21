@@ -1,6 +1,6 @@
 # Publishing
 
-Codex PR Safe releases are built by GitHub Actions from the committed npm lockfile and a clean immutable source tag.
+Codex PR Safe releases are built by GitHub Actions from the committed npm lockfile and a clean immutable source commit.
 
 ## Release gate
 
@@ -45,7 +45,9 @@ The tag version must match `package.json.version` and `package-lock.json`, and t
 
 ## Create a release
 
-After the version change has passed CI and is merged to `main`:
+After the version change has passed CI and is merged to `main`, the `Release` workflow detects the committed version bump automatically. It runs the full gate and, only after every validation and packaging job succeeds, creates the immutable `v<package.version>` tag and GitHub Release in the same run. Ordinary `main` pushes with no version change skip the release jobs.
+
+Pushing a matching tag remains a supported manual fallback:
 
 ```bash
 git checkout main
@@ -59,7 +61,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-The permanent `Release` workflow then reruns the full release gate, packages the official VSIX, checks its contents, creates `SHA256SUMS`, uploads the build artifact, and creates the GitHub Release automatically.
+Do not force-move release tags. A rerun safely reuses a tag only when it resolves to the same commit, and refreshes existing Release artifacts with `--clobber`.
 
 ## Package contents
 

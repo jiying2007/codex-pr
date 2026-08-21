@@ -256,6 +256,16 @@ test('non-Windows command preparation never uses shell', () => {
   }
 });
 
+test('release workflow automatically tags committed version bumps on main', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '.github', 'workflows', 'release.yml'), 'utf8');
+  assert.match(workflow, /branches:\s*\n\s*- main/);
+  assert.match(workflow, /tags:\s*\n\s*- 'v\*'/);
+  assert.match(workflow, /GITHUB_EVENT_BEFORE: \$\{\{ github\.event\.before \}\}/);
+  assert.match(workflow, /name: Ensure release tag/);
+  assert.match(workflow, /gh api --method POST/);
+  assert.match(workflow, /gh release upload .*--clobber/);
+});
+
 (async () => {
   let passed = 0;
   for (const { name, fn } of tests) {

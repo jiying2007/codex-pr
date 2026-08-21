@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.0.3
+
+- Automatically create the immutable version tag and GitHub Release after a committed version bump reaches `main`, while retaining the manual tag-push fallback.
+- Make release reruns idempotent and reject existing lightweight or annotated tags that resolve to a different commit.
+
 - Support test repositories on Git versions that predate `git init -b`.
 - Consume matching Codex Review Safe receipts for committed first-parent ranges without treating AI review as human approval or test evidence.
 - Use the versioned Codex Safe argv/compatibility contract shared with Commit and Review.
