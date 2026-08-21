@@ -1,10 +1,94 @@
 'use strict';
-const fs=require('fs');const path=require('path');const root=path.resolve(__dirname,'..');const p=r=>path.join(root,r);const ex=r=>fs.existsSync(p(r));const rd=r=>fs.readFileSync(p(r),'utf8');const wr=(r,t)=>fs.writeFileSync(p(r),t);const fail=m=>{throw new Error(m)};
-function rw(r){if(!ex(r))return;let t=rd(r);t=t.replaceAll("require('./src/safe-contract')","require('./src/codex-safe-core/safe-contract')").replaceAll("require('./safe-contract')","require('./codex-safe-core/safe-contract')").replaceAll("require('../src/safe-contract')","require('../src/codex-safe-core/safe-contract')");wr(r,t)}
-for(const r of ['bootstrap.js','extension.js'])rw(r);for(const d of ['src','test','scripts']){if(!ex(d))continue;const v=c=>{for(const e of fs.readdirSync(p(c),{withFileTypes:true})){const r=path.join(c,e.name);if(e.isDirectory())v(r);else if(e.name.endsWith('.js'))rw(r)}};v(d)}
-if(ex('src/safe-contract.js'))fs.unlinkSync(p('src/safe-contract.js'));
-const pkg=JSON.parse(rd('package.json'));pkg.scripts.check=String(pkg.scripts.check||'').replace('node --check src/safe-contract.js && ','');if(!pkg.scripts.check.includes('node --check src/codex-safe-core/safe-contract.js'))pkg.scripts.check=pkg.scripts.check.replace('node --check src/codex.js && ','node --check src/codex.js && node --check src/codex-safe-core/safe-contract.js && node --check src/codex-safe-core/codex-cli.js && ');if(pkg.scripts.check.includes('src/safe-contract.js'))fail('package check still references shim');wr('package.json',JSON.stringify(pkg,null,2)+'\n');
-const checks=["          grep -Fx 'extension/src/codex-safe-core/codex-cli.js' /tmp/vsix-files.txt","          grep -Fx 'extension/src/codex-safe-core/safe-contract.js' /tmp/vsix-files.txt","          grep -Fx 'extension/src/codex-safe-core/manifest.json' /tmp/vsix-files.txt"].join('\n');for(const r of ['.github/workflows/ci.yml','.github/workflows/release.yml']){let t=rd(r);t=t.replace("          grep -Fx 'extension/src/safe-contract.js' /tmp/vsix-files.txt",checks);if(t.includes("extension/src/safe-contract.js"))fail(r+' still requires shim');wr(r,t)}
-let pub=rd('PUBLISHING.md');pub=pub.replace('- `src/safe-contract.js`\n','- `src/codex-safe-core/codex-cli.js`\n- `src/codex-safe-core/safe-contract.js`\n- `src/codex-safe-core/manifest.json`\n');if(pub.includes('`src/safe-contract.js`'))fail('PUBLISHING still references shim');wr('PUBLISHING.md',pub);
-for(const r of ['scripts/final-transition-cleanup.js','.github/workflows/final-transition-cleanup.yml'])if(ex(r))fs.unlinkSync(p(r));
-if(ex('src/safe-contract.js'))fail('shim remains');for(const r of ['bootstrap.js','extension.js','src/codex.js','package.json'])if(ex(r)&&(rd(r).includes("require('./safe-contract')")||rd(r).includes('src/safe-contract')))fail('legacy reference remains '+r);console.log('Final PR shim residue removed.');
+
+const fs = require('fs');
+const path = require('path');
+
+const root = path.resolve(__dirname, '..');
+const p = rel => path.join(root, rel);
+const exists = rel => fs.existsSync(p(rel));
+const read = rel => fs.readFileSync(p(rel), 'utf8');
+const write = (rel, text) => fs.writeFileSync(p(rel), text);
+const fail = message => { throw new Error(message); };
+
+function rewrite(rel) {
+  if (!exists(rel)) return;
+  let text = read(rel);
+  text = text
+    .replaceAll("require('./src/safe-contract')", "require('./src/codex-safe-core/safe-contract')")
+    .replaceAll("require('./safe-contract')", "require('./codex-safe-core/safe-contract')")
+    .replaceAll("require('../src/safe-contract')", "require('../src/codex-safe-core/safe-contract')");
+  write(rel, text);
+}
+
+for (const rel of ['bootstrap.js', 'extension.js', 'test.js']) rewrite(rel);
+for (const dir of ['src', 'test', 'scripts']) {
+  if (!exists(dir)) continue;
+  const visit = current => {
+    for (const entry of fs.readdirSync(p(current), { withFileTypes: true })) {
+      const rel = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (rel === path.join('src', 'codex-safe-core')) continue;
+        visit(rel);
+      } else if (entry.name.endsWith('.js')) {
+        rewrite(rel);
+      }
+    }
+  };
+  visit(dir);
+}
+
+if (exists('src/safe-contract.js')) fs.unlinkSync(p('src/safe-contract.js'));
+
+const pkg = JSON.parse(read('package.json'));
+pkg.scripts.check = String(pkg.scripts.check || '').replace('node --check src/safe-contract.js && ', '');
+if (!pkg.scripts.check.includes('node --check src/codex-safe-core/safe-contract.js')) {
+  pkg.scripts.check = pkg.scripts.check.replace(
+    'node --check src/codex.js && ',
+    'node --check src/codex.js && node --check src/codex-safe-core/safe-contract.js && node --check src/codex-safe-core/codex-cli.js && '
+  );
+}
+if (pkg.scripts.check.includes('src/safe-contract.js')) fail('package check still references shim');
+write('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+
+const canonicalPackageChecks = [
+  "          grep -Fx 'extension/src/codex-safe-core/codex-cli.js' /tmp/vsix-files.txt",
+  "          grep -Fx 'extension/src/codex-safe-core/safe-contract.js' /tmp/vsix-files.txt",
+  "          grep -Fx 'extension/src/codex-safe-core/manifest.json' /tmp/vsix-files.txt"
+].join('\n');
+for (const workflow of ['.github/workflows/ci.yml', '.github/workflows/release.yml']) {
+  if (!exists(workflow)) continue;
+  let text = read(workflow);
+  text = text.replace("          grep -Fx 'extension/src/safe-contract.js' /tmp/vsix-files.txt", canonicalPackageChecks);
+  if (text.includes('extension/src/safe-contract.js')) fail(`${workflow} still requires shim`);
+  write(workflow, text);
+}
+
+if (exists('PUBLISHING.md')) {
+  let publishing = read('PUBLISHING.md');
+  publishing = publishing.replace(
+    '- `src/safe-contract.js`\n',
+    '- `src/codex-safe-core/codex-cli.js`\n- `src/codex-safe-core/safe-contract.js`\n- `src/codex-safe-core/manifest.json`\n'
+  );
+  if (publishing.includes('`src/safe-contract.js`')) fail('PUBLISHING still references shim');
+  write('PUBLISHING.md', publishing);
+}
+
+for (const rel of ['scripts/final-transition-cleanup.js', '.github/workflows/final-transition-cleanup.yml']) {
+  if (exists(rel)) fs.unlinkSync(p(rel));
+}
+
+if (exists('src/safe-contract.js')) fail('shim remains');
+for (const rel of ['bootstrap.js', 'extension.js', 'src/codex.js', 'package.json']) {
+  if (!exists(rel)) continue;
+  const text = read(rel);
+  if (text.includes("require('./safe-contract')") || text.includes('src/safe-contract')) {
+    fail(`legacy reference remains in ${rel}`);
+  }
+}
+
+const canonicalCli = read('src/codex-safe-core/codex-cli.js');
+if (!canonicalCli.includes("require('./safe-contract')")) {
+  fail('canonical Safe Core internal contract import was modified');
+}
+
+console.log('Final PR shim residue removed without modifying canonical Safe Core bytes.');
