@@ -17,6 +17,7 @@ const {
 } = require('./src/core');
 const {
   resolveGitRoot,
+  currentBranch,
   detectBase,
   repositorySnapshot,
   collectPrContext,
@@ -184,7 +185,19 @@ function linkCancellation(externalToken, internalSource) {
   return externalToken.onCancellationRequested(() => internalSource.cancel());
 }
 
-async function buildPreviewState(root, baseRef, context, structured, formatted, codexVersion, reviewEvidence, token) {
+async function repositoryIdentity(root, baseRef, token) {
+  const [snapshot, headBranch] = await Promise.all([
+    repositorySnapshot(root, baseRef, token),
+    currentBranch(root, token)
+  ]);
+  return { ...snapshot, headBranch };
+}
+
+function repositoryIdentityEqual(a, b) {
+  return Boolean(a && b && a.headBranch === b.headBranch && snapshotEqual(a, b));
+}
+
+async function buildPreviewState(root, baseRef, context, structured, formatted, codexVersion, reviewEvidence, options, token) {
   const gh = await resolveGitHubOpenContext(root, baseRef, context.headBranch, token);
   const compareUrl = buildGitHubCompareUrl({ baseRemote: gh.baseRemote, baseBranch: gh.baseBranch, headRemote: gh.headRemote, headBranch: gh.headBranch });
   return {
@@ -197,6 +210,8 @@ async function buildPreviewState(root, baseRef, context, structured, formatted, 
     structured,
     title: formatted.title,
     body: formatted.body,
+    titleMaxLength: options.titleMaxLength,
+    maxBodyChars: options.maxBodyChars,
     compareUrl,
     canOpenGitHub: Boolean(compareUrl && gh.published),
     codexVersion,
@@ -205,11 +220,17 @@ async function buildPreviewState(root, baseRef, context, structured, formatted, 
   };
 }
 
-function validateEditedResult(title, body) {
+function validateEditedResult(title, body, limits = {}) {
   const t = String(title || '').trim().replace(/\r?\n/g, ' ');
   const b = String(body || '').trim();
-  if (!t || Array.from(t).length > 160) throw new Error(ui('PR 标题为空或超过 160 个字符。', 'PR title is empty or exceeds 160 characters.'));
-  if (b.length > 20000) throw new Error(ui('PR 正文超过 20000 字符。', 'PR body exceeds 20000 characters.'));
+  const titleMaxLength = Math.min(160, Math.max(1, Number(limits.titleMaxLength) || 160));
+  const maxBodyChars = Math.min(20000, Math.max(1, Number(limits.maxBodyChars) || 20000));
+  if (!t || Array.from(t).length > titleMaxLength) {
+    throw new Error(ui('PR 标题为空或超过 {0} 个字符。', 'PR title is empty or exceeds {0} characters.', titleMaxLength));
+  }
+  if (b.length > maxBodyChars) {
+    throw new Error(ui('PR 正文超过 {0} 字符。', 'PR body exceeds {0} characters.', maxBodyChars));
+  }
   if (/[\0-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(`${t}\n${b}`)) throw new Error(ui('PR 内容包含非法控制字符。', 'PR content contains invalid control characters.'));
   return { title: t, body: b };
 }
@@ -223,9 +244,9 @@ async function copyValue(kind, edited) {
 }
 
 async function ensureFreshResult(state, token) {
-  const current = await repositorySnapshot(state.root, state.baseRef, token);
-  if (!snapshotEqual(current, state.snapshot)) {
-    const error = new Error(ui('HEAD 或 Base 已变化，当前 PR 结果已过期，请重新生成。', 'HEAD or base changed. The current PR result is stale; regenerate it first.'));
+  const current = await repositoryIdentity(state.root, state.baseRef, token);
+  if (!repositoryIdentityEqual(current, state.snapshot)) {
+    const error = new Error(ui('HEAD、当前分支或 Base 已变化，当前 PR 结果已过期，请重新生成。', 'HEAD, current branch, or base changed. The current PR result is stale; regenerate it first.'));
     error.code = 'ESTALE';
     throw error;
   }
@@ -234,7 +255,10 @@ async function ensureFreshResult(state, token) {
 
 async function renderPreview(state) {
   if (!previewPanel) {
-    previewPanel = vscode.window.createWebviewPanel('safeCodexPr.preview', 'Codex PR Safe', vscode.ViewColumn.Beside, { enableScripts: true, retainContextWhenHidden: true });
+    previewPanel = vscode.window.createWebviewPanel('safeCodexPr.preview', 'Codex PR Safe', vscode.ViewColumn.Beside, {
+      enableScripts: true,
+      localResourceRoots: []
+    });
     previewPanel.onDidDispose(() => { previewMessageDisposable?.dispose(); previewMessageDisposable = undefined; previewPanel = undefined; });
   }
   previewPanel.title = `Codex PR Safe · ${repoLabel(state.root)}`;
@@ -248,8 +272,11 @@ async function renderPreview(state) {
       const latest = lastByRepo.get(normalizeFsPath(state.root));
       if (!latest) throw new Error(ui('当前 PR 结果已失效，请重新生成。', 'The current PR result is stale. Generate it again.'));
 
-      if (['copyAll', 'copyTitle', 'copyBody', 'openGitHub'].includes(message.type)) await ensureFreshResult(latest);
-      const edited = validateEditedResult(message.title, message.body);
+      if (message.type === 'regenerate') return generate({ regenerate: true, rootOverride: state.root, baseOverride: state.baseRef });
+      if (message.type === 'changeBase') return generate({ regenerate: false, rootOverride: state.root, forceBasePick: true });
+
+      await ensureFreshResult(latest);
+      const edited = validateEditedResult(message.title, message.body, latest);
       latest.title = edited.title;
       latest.body = edited.body;
       latest.stale = false;
@@ -257,12 +284,11 @@ async function renderPreview(state) {
       if (message.type === 'copyAll') return copyValue('all', edited);
       if (message.type === 'copyTitle') return copyValue('title', edited);
       if (message.type === 'copyBody') return copyValue('body', edited);
-      if (message.type === 'regenerate') return generate({ regenerate: true, rootOverride: state.root, baseOverride: state.baseRef });
-      if (message.type === 'changeBase') return generate({ regenerate: false, rootOverride: state.root, forceBasePick: true });
       if (message.type === 'openGitHub') {
         const gh = await resolveGitHubOpenContext(state.root, state.baseRef, state.headBranch);
         const compareUrl = buildGitHubCompareUrl({ baseRemote: gh.baseRemote, baseBranch: gh.baseBranch, headRemote: gh.headRemote, headBranch: gh.headBranch });
         if (!compareUrl || !gh.published) throw new Error(ui('当前分支尚未推送到可识别的 GitHub remote。', 'The current branch is not published to a recognized GitHub remote.'));
+        await ensureFreshResult(latest);
         latest.compareUrl = compareUrl;
         latest.canOpenGitHub = true;
         await copyValue('all', edited);
@@ -303,19 +329,19 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
       const linked = linkCancellation(uiToken, state.cancelSource);
       try {
         const token = state.cancelSource.token;
-        const before = await repositorySnapshot(root, baseRef, token);
+        const before = await repositoryIdentity(root, baseRef, token);
         const context = await collectPrContext(root, baseRef, options, token);
-        const afterCollection = await repositorySnapshot(root, baseRef, token);
-        if (!snapshotEqual(before, afterCollection)) throw Object.assign(new Error(ui('收集 PR 输入期间 HEAD 或 Base 已变化，请重试。', 'HEAD or base changed while collecting PR input. Try again.')), { code: 'ESTALE' });
+        const afterCollection = await repositoryIdentity(root, baseRef, token);
+        if (!repositoryIdentityEqual(before, afterCollection)) throw Object.assign(new Error(ui('收集 PR 输入期间 HEAD、当前分支或 Base 已变化，请重试。', 'HEAD, current branch, or base changed while collecting PR input. Try again.')), { code: 'ESTALE' });
         const previousStructured = regenerate ? prior?.structured : undefined;
         const codex = await runCodex(context, options, previousStructured, token);
-        const beforeUse = await repositorySnapshot(root, baseRef, token);
-        if (!snapshotEqual(before, beforeUse)) throw Object.assign(new Error(ui('Codex 生成期间 HEAD 或 Base 已变化，结果已丢弃。', 'HEAD or base changed while Codex was generating. The result was discarded.')), { code: 'ESTALE' });
+        const beforeUse = await repositoryIdentity(root, baseRef, token);
+        if (!repositoryIdentityEqual(before, beforeUse)) throw Object.assign(new Error(ui('Codex 生成期间 HEAD、当前分支或 Base 已变化，结果已丢弃。', 'HEAD, current branch, or base changed while Codex was generating. The result was discarded.')), { code: 'ESTALE' });
         const reviewEvidence = await getReviewEvidence(root, baseRef, context.headOid, token);
         const formatted = formatPullRequest(codex.result, options, { baseRef, headBranch: context.headBranch, reviewEvidence });
-        const preview = await buildPreviewState(root, baseRef, context, codex.result, formatted, codex.codexVersion, reviewEvidence, token);
-        const afterPreview = await repositorySnapshot(root, baseRef, token);
-        if (!snapshotEqual(before, afterPreview)) throw Object.assign(new Error(ui('生成 PR 预览期间 HEAD 或 Base 已变化，结果已丢弃。', 'HEAD or base changed while the PR preview was being prepared. The result was discarded.')), { code: 'ESTALE' });
+        const preview = await buildPreviewState(root, baseRef, context, codex.result, formatted, codex.codexVersion, reviewEvidence, options, token);
+        const afterPreview = await repositoryIdentity(root, baseRef, token);
+        if (!repositoryIdentityEqual(before, afterPreview)) throw Object.assign(new Error(ui('生成 PR 预览期间 HEAD、当前分支或 Base 已变化，结果已丢弃。', 'HEAD, current branch, or base changed while the PR preview was being prepared. The result was discarded.')), { code: 'ESTALE' });
         return { preview, snapshot: before };
       } finally { linked.dispose(); }
     });
@@ -341,16 +367,18 @@ async function commandWithLast(kind, commandArgs = []) {
   await ensureFreshResult(state);
   state.stale = false;
   if (kind === 'show') return renderPreview(state);
-  if (kind === 'title') return copyValue('title', state);
-  if (kind === 'body') return copyValue('body', state);
-  if (kind === 'all') return copyValue('all', state);
+  const edited = validateEditedResult(state.title, state.body, state);
+  if (kind === 'title') return copyValue('title', edited);
+  if (kind === 'body') return copyValue('body', edited);
+  if (kind === 'all') return copyValue('all', edited);
   if (kind === 'open') {
     const gh = await resolveGitHubOpenContext(root, state.baseRef, state.headBranch);
     const compareUrl = buildGitHubCompareUrl({ baseRemote: gh.baseRemote, baseBranch: gh.baseBranch, headRemote: gh.headRemote, headBranch: gh.headBranch });
     if (!compareUrl || !gh.published) throw new Error(ui('当前分支尚未推送到可识别的 GitHub remote。', 'The current branch is not published to a recognized GitHub remote.'));
+    await ensureFreshResult(state);
     state.compareUrl = compareUrl;
     state.canOpenGitHub = true;
-    await copyValue('all', state);
+    await copyValue('all', edited);
     await vscode.env.openExternal(vscode.Uri.parse(compareUrl));
   }
 }
@@ -405,4 +433,4 @@ function deactivate() {
   previewPanel?.dispose();
 }
 
-module.exports = { activate, deactivate, effectiveOptions, validateEditedResult, textForClipboard, normalizeFsPath, ensureFreshResult, getReviewEvidence };
+module.exports = { activate, deactivate, effectiveOptions, validateEditedResult, textForClipboard, normalizeFsPath, ensureFreshResult, getReviewEvidence, repositoryIdentityEqual };
