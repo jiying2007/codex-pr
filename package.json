@@ -5,27 +5,10 @@
   "version": "1.0.3",
   "publisher": "jiying2007",
   "license": "SEE LICENSE IN LICENSE",
-  "engines": {
-    "vscode": "^1.90.0"
-  },
-  "extensionKind": [
-    "workspace"
-  ],
-  "categories": [
-    "SCM Providers",
-    "Other"
-  ],
-  "keywords": [
-    "git",
-    "pull request",
-    "pr",
-    "codex",
-    "github",
-    "ai",
-    "scm",
-    "safe",
-    "description"
-  ],
+  "engines": { "vscode": "^1.90.0" },
+  "extensionKind": ["workspace"],
+  "categories": ["SCM Providers", "Other"],
+  "keywords": ["git", "pull request", "pr", "codex", "github", "ai", "scm", "safe", "description"],
   "activationEvents": [
     "onCommand:safeCodexPr.generate",
     "onCommand:safeCodexPr.regenerate",
@@ -37,16 +20,10 @@
     "onCommand:safeCodexPr.openPullRequest",
     "onCommand:safeCodexPr.checkEnvironment"
   ],
-  "main": "./bootstrap.js",
+  "main": "./src/extension-entry.js",
   "capabilities": {
-    "untrustedWorkspaces": {
-      "supported": false,
-      "description": "%capability.untrusted%"
-    },
-    "virtualWorkspaces": {
-      "supported": false,
-      "description": "%capability.virtual%"
-    }
+    "untrustedWorkspaces": { "supported": false, "description": "%capability.untrusted%" },
+    "virtualWorkspaces": { "supported": false, "description": "%capability.virtual%" }
   },
   "contributes": {
     "commands": [
@@ -61,9 +38,7 @@
       { "command": "safeCodexPr.checkEnvironment", "title": "%command.checkEnvironment.title%", "category": "%extension.displayName%" }
     ],
     "menus": {
-      "scm/title": [
-        { "command": "safeCodexPr.generate", "when": "scmProvider == git && isWorkspaceTrusted", "group": "navigation@9" }
-      ],
+      "scm/title": [{ "command": "safeCodexPr.generate", "when": "scmProvider == git && isWorkspaceTrusted", "group": "navigation@9" }],
       "commandPalette": [
         { "command": "safeCodexPr.generate", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
         { "command": "safeCodexPr.regenerate", "when": "workspaceFolderCount > 0 && isWorkspaceTrusted" },
@@ -94,20 +69,21 @@
     }
   },
   "scripts": {
-    "check": "node --check bootstrap.js && node --check extension.js && node --check src/core.js && node --check src/process.js && node --check src/git.js && node --check src/codex.js && node --check src/preview.js && node --check src/codex-safe-core/safe-contract.js && node --check src/codex-safe-core/codex-cli.js && node --check src/github-pr-provider.js && node --check scripts/safe-core.js && node --check scripts/github-pr-provider.test.js && node --check scripts/release.js && node --check scripts/hardening.test.js && node scripts/safe-core.js verify && node scripts/github-pr-provider.test.js && node scripts/release.test.js && node scripts/hardening.test.js && npm run verify:l10n && node test.js",
+    "core:init": "git submodule update --init --recursive",
+    "precheck": "npm run core:init",
+    "pretest": "npm run core:init",
+    "prepackage": "npm run core:init",
+    "check": "node --check src/extension-entry.js && node --check extension.js && node --check src/core.js && node --check src/process.js && node --check src/git.js && node --check src/codex.js && node --check src/preview.js && node --check src/codex-safe-core/safe-contract.js && node --check src/codex-safe-core/codex-cli.js && node --check src/codex-safe-core/process-runner.js && node --check src/github-pr-provider.js && node --check scripts/github-pr-provider.test.js && node --check scripts/release.js && node --check scripts/hardening.test.js && node scripts/github-pr-provider.test.js && node scripts/release.test.js && node scripts/hardening.test.js && npm run verify:l10n && node test.js",
     "test:unit": "node test.js",
     "test:integration": "node ./test/integration/runTest.js",
     "test": "npm run test:unit",
     "package": "vsce package --no-dependencies",
     "verify:lock": "node ./scripts/verify-lock.js",
-    "safe-core:verify": "node ./scripts/safe-core.js verify",
-    "safe-core:upstream": "node ./scripts/safe-core.js upstream",
-    "safe-core:sync": "node ./scripts/safe-core.js sync",
     "release:prepare": "node ./scripts/release.js prepare",
     "release:check": "node ./scripts/release.js check",
     "release:push": "node ./scripts/release.js push",
     "verify:l10n": "node ./scripts/verify-l10n.js",
-    "ci": "npm run verify:lock && npm ci --ignore-scripts --no-audit --no-fund && npm run check && npm run safe-core:upstream && npm run test:integration && npm run package"
+    "ci": "npm run verify:lock && npm ci --ignore-scripts --no-audit --no-fund && npm run check && npm run test:integration && npm run package"
   },
   "devDependencies": {
     "@vscode/test-electron": "3.1.0",
