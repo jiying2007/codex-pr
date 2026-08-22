@@ -2,12 +2,13 @@
 
 const { createProcessRunner } = require('./codex-safe-core/process-runner');
 
-const runner = createProcessRunner();
+const runner = createProcessRunner((_zh, en) => en);
 
 module.exports = Object.freeze({
   isWindowsScript: runner.isWindowsScript,
   quoteWindowsCmdArg: runner.quoteWindowsCmdArg,
   prepareCommand: runner.prepareCommand,
-  runProcess: runner.runPreparedProcess,
+  runPreparedProcess: runner.runPreparedProcess,
+  runProcess: runner.runProcess,
   runProcessBuffer: runner.runProcessBuffer
 });
