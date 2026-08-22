@@ -128,7 +128,7 @@ A fresh generation creates a fresh draft identity so stale webview state cannot 
 
 Review evidence is obtained from Codex Review Safe through its read-only API and independently matched against first-parent committed diffs.
 
-Commit provenance is obtained from Codex Commit Safe. Pending Commit Receipt v3 records are not trusted directly: Commit Safe recomputes each real commit's parent, full diff and final commit message before binding to `commitOid`.
+Commit provenance is obtained from Codex Commit Safe. Pending Commit Receipt v4 records are not trusted directly: Commit Safe recomputes each real commit's parent, full diff and final commit message before binding to `commitOid`.
 
 PR Safe displays deterministic receipt coverage locally. Receipts are AI workflow evidence only; they do not establish human approval, requirements compliance, build success or test success.
 
