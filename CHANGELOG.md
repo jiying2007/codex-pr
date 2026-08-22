@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.0.0
+
 - Breaking: hard-switch to Codex Safe Core v2 through a commit-pinned Git submodule; remove copied vendoring, legacy bootstrap/startup activation, compatibility shims, and old Core ownership from the PR repository.
 - Replace `.codex-pr.json` with the unified `.codex-safe.json` schema v2 `pr` section; v1 policy is intentionally unsupported.
 - Route both the native PR flow and the optional GitHub Pull Requests title/description provider through the same Safe Core Semantic Context Budget, with generated/lock/binary metadata-only handling and a fixed native 8 MiB raw-diff safety ceiling.
