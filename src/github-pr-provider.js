@@ -2,7 +2,7 @@
 
 const vscode = require('vscode');
 const { runPreparedProcess } = require('./process');
-const { buildPrompt, outputSchema, validateStructuredResult, formatPullRequest } = require('./core');
+const { buildPrompt, outputSchema, validateStructuredResult, formatPullRequest } = require('./pr-domain');
 const { createCodexCli } = require('./codex-safe-core/codex-cli');
 const { buildSemanticContext } = require('./codex-safe-core/context-builder');
 
@@ -102,7 +102,7 @@ function normalizeProviderContext(context, options) {
 
 function buildProviderInput(options, providerContext) {
   const prompt = buildPrompt(
-    { ...options, extraInstructions: '' },
+    { ...options, userInstructions: '', repositoryInstructions: '' },
     { templateText: providerContext.templateText },
     null
   );

@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { escapeHtml } = require('./core');
+const { escapeHtml } = require('./pr-domain');
 
 function nonce() {
   return crypto.randomBytes(16).toString('hex');

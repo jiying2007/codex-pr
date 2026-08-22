@@ -4,10 +4,6 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const {
-  PROJECT_RULES_FILE,
-  clampNumber,
-  validateExtraInstructions,
-  validateProjectRulesObject,
   normalizeRef,
   formatPullRequest,
   normalizeReviewRangeEvidence,
@@ -15,16 +11,16 @@ const {
   snapshotEqual,
   buildGitHubCompareUrl,
   repoLabel
-} = require('./src/core');
+} = require('./src/pr-domain');
 const {
   resolveGitRoot,
   currentBranch,
   detectBase,
   repositorySnapshot,
   collectPrContext,
-  resolveGitHubOpenContext,
-  readHeadBlob
+  resolveGitHubOpenContext
 } = require('./src/git');
+const { effectiveOptions } = require('./src/policy');
 const { resolveCodexExecutable, probeCodexCapabilities, runCodex } = require('./src/codex');
 const { previewHtml } = require('./src/preview');
 
@@ -86,50 +82,6 @@ async function getCommitEvidence(root, baseRef, headOid, token) {
     if (error?.code === 'ECANCELLED') throw error;
     return { status: 'error', totalCommits: 0, generatedCommits: 0, reviewedGeneratedCommits: 0 };
   }
-}
-
-function getUserOnlySetting(config, key, fallback) {
-  const inspected = config.inspect(key);
-  if (!inspected) return fallback;
-  if (inspected.globalLanguageValue !== undefined) return inspected.globalLanguageValue;
-  if (inspected.globalValue !== undefined) return inspected.globalValue;
-  return inspected.defaultValue !== undefined ? inspected.defaultValue : fallback;
-}
-
-async function readProjectRules(root, token) {
-  const blob = await readHeadBlob(root, PROJECT_RULES_FILE, 32 * 1024, token);
-  if (!blob) return {};
-  if (blob.symlink) throw new Error(`${PROJECT_RULES_FILE} in HEAD must be a regular file, not a symbolic link.`);
-  if (blob.tooLarge) throw new Error(`${PROJECT_RULES_FILE} in HEAD exceeds 32 KiB.`);
-  try {
-    return validateProjectRulesObject(JSON.parse(blob.text));
-  } catch (error) {
-    throw new Error(ui(`无法读取 HEAD 中的 ${PROJECT_RULES_FILE}：${error.message}`, `Failed to read ${PROJECT_RULES_FILE} from HEAD: ${error.message}`));
-  }
-}
-
-async function effectiveOptions(root, token) {
-  const config = vscode.workspace.getConfiguration('safeCodexPr');
-  const project = await readProjectRules(root, token);
-  const codexPath = String(getUserOnlySetting(config, 'codexPath', 'codex') || 'codex').trim() || 'codex';
-  const model = String(getUserOnlySetting(config, 'model', '') || '').trim();
-  const language = project.language ?? config.get('language', 'zh-CN');
-  if (!['zh-CN', 'en'].includes(language)) throw new Error('safeCodexPr.language must be zh-CN or en.');
-  const baseBranch = String(project.baseBranch ?? config.get('baseBranch', '') ?? '').trim();
-  const extraInstructions = validateExtraInstructions(project.extraInstructions ?? config.get('extraInstructions', ''));
-  return {
-    codexPath,
-    model,
-    language,
-    baseBranch,
-    maxDiffBytes: clampNumber(project.maxDiffBytes ?? config.get('maxDiffBytes', 524288), 524288, 4096, 2097152, 'maxDiffBytes'),
-    maxCommitBytes: clampNumber(project.maxCommitBytes ?? config.get('maxCommitBytes', 65536), 65536, 4096, 524288, 'maxCommitBytes'),
-    titleMaxLength: clampNumber(project.titleMaxLength ?? config.get('titleMaxLength', 100), 100, 40, 160, 'titleMaxLength'),
-    maxBodyChars: clampNumber(project.maxBodyChars ?? config.get('maxBodyChars', 8000), 8000, 1000, 20000, 'maxBodyChars'),
-    includePullRequestTemplate: typeof project.includePullRequestTemplate === 'boolean' ? project.includePullRequestTemplate : Boolean(config.get('includePullRequestTemplate', true)),
-    extraInstructions,
-    timeoutSeconds: clampNumber(project.timeoutSeconds ?? config.get('timeoutSeconds', 120), 120, 10, 300, 'timeoutSeconds')
-  };
 }
 
 function normalizeFsPath(value) {

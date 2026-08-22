@@ -6,7 +6,7 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const dist = path.join(root, 'dist');
 const runtimeModules = [
-  'core.js', 'pr-domain.js', 'process.js', 'git.js', 'git-domain.js',
+  'pr-domain.js', 'policy.js', 'process.js', 'git.js', 'git-domain.js',
   'codex.js', 'preview.js', 'github-pr-provider.js'
 ];
 const coreModules = [

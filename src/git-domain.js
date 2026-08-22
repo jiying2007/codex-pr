@@ -1,7 +1,8 @@
 'use strict';
 
 const { runPreparedProcess } = require('./process');
-const { normalizeRef, chooseDetectedBase, splitRemoteBranch, parseGitHubRemote, sameGitHubRepo } = require('./core');
+const { normalizeRef, chooseDetectedBase, splitRemoteBranch, parseGitHubRemote, sameGitHubRepo } = require('./pr-domain');
+const { assertSafeGitToken } = require('./codex-safe-core/git-repository');
 
 async function git(root, args, options = {}, token) {
   return runPreparedProcess('git', ['-C', root, ...args], {
@@ -32,14 +33,16 @@ async function currentBranch(root, token) {
 }
 
 async function refOid(root, ref, token) {
-  const { stdout } = await git(root, ['rev-parse', '--verify', `${ref}^{commit}`], {}, token);
+  const safeRef = assertSafeGitToken(ref, 'Git ref');
+  const { stdout } = await git(root, ['rev-parse', '--verify', `${safeRef}^{commit}`], {}, token);
   return stdout.trim();
 }
 
 async function remoteHeadFor(root, remote, token) {
   if (!remote) return '';
+  const safeRemote = assertSafeGitToken(remote, 'remote name');
   try {
-    const { stdout } = await git(root, ['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote}/HEAD`], {}, token);
+    const { stdout } = await git(root, ['symbolic-ref', '--quiet', '--short', `refs/remotes/${safeRemote}/HEAD`], {}, token);
     return normalizeRef(stdout.trim());
   } catch {
     return '';
@@ -94,12 +97,14 @@ async function detectBase(root, configuredBase, token) {
 }
 
 async function aheadCount(root, baseRef, token) {
-  const { stdout } = await git(root, ['rev-list', '--count', `${baseRef}..HEAD`], {}, token);
+  const safeBase = assertSafeGitToken(baseRef, 'base ref');
+  const { stdout } = await git(root, ['rev-list', '--count', `${safeBase}..HEAD`], {}, token);
   return Number(stdout.trim()) || 0;
 }
 
 async function mergeBase(root, baseRef, token) {
-  const { stdout } = await git(root, ['merge-base', baseRef, 'HEAD'], {}, token);
+  const safeBase = assertSafeGitToken(baseRef, 'base ref');
+  const { stdout } = await git(root, ['merge-base', safeBase, 'HEAD'], {}, token);
   return stdout.trim();
 }
 
