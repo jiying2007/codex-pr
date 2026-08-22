@@ -26,6 +26,7 @@ const {
   SAFE_CORE_VERSION,
   REVIEW_RECEIPT_SCHEMA_VERSION,
   COMMIT_RECEIPT_SCHEMA_VERSION,
+  PR_PROMPT_CONTRACT_VERSION,
   validateReviewReceipt,
   validateCommitReceipt
 } = require('./src/codex-safe-core/safe-contract');
@@ -44,7 +45,7 @@ function initMainRepository(root) {
 }
 
 const reviewReceipt = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   kind: 'codex-review',
   subject: {
     type: 'git-index',
@@ -64,7 +65,7 @@ const reviewReceipt = {
 };
 const commitOid = 'a'.repeat(40);
 const commitReceipt = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   kind: 'codex-commit-safe',
   headOid: 'b'.repeat(40),
   indexFingerprint: 'c'.repeat(64),
@@ -78,15 +79,22 @@ const commitReceipt = {
   commitOid
 };
 
-test('Family v3 protocol line is canonical', () => {
-  assert.strictEqual(SAFE_CORE_VERSION, 3);
+test('Family v4 protocol line is canonical', () => {
+  assert.strictEqual(SAFE_CORE_VERSION, 4);
   assert.strictEqual(POLICY_SCHEMA_VERSION, 3);
-  assert.strictEqual(REVIEW_RECEIPT_SCHEMA_VERSION, 3);
-  assert.strictEqual(COMMIT_RECEIPT_SCHEMA_VERSION, 3);
-  assert.ok(validateReviewReceipt(reviewReceipt));
-  assert.ok(validateCommitReceipt(commitReceipt));
-  assert.strictEqual(validateReviewReceipt({ ...reviewReceipt, schemaVersion: 2 }), null);
-  assert.strictEqual(validateCommitReceipt({ ...commitReceipt, schemaVersion: 2 }), null);
+  assert.strictEqual(REVIEW_RECEIPT_SCHEMA_VERSION, 4);
+  assert.strictEqual(COMMIT_RECEIPT_SCHEMA_VERSION, 4);
+  assert.strictEqual(PR_PROMPT_CONTRACT_VERSION, 1);
+  const validatedReview = validateReviewReceipt(reviewReceipt);
+  const validatedCommit = validateCommitReceipt(commitReceipt);
+  assert.ok(validatedReview);
+  assert.ok(validatedCommit);
+  assert.strictEqual(validatedReview.safeCoreVersion, 4);
+  assert.strictEqual(validatedReview.promptContractVersion, 1);
+  assert.strictEqual(validatedCommit.safeCoreVersion, 4);
+  assert.strictEqual(validatedCommit.promptContractVersion, 1);
+  assert.strictEqual(validateReviewReceipt({ ...reviewReceipt, schemaVersion: 3 }), null);
+  assert.strictEqual(validateCommitReceipt({ ...commitReceipt, schemaVersion: 3 }), null);
 });
 
 test('repository PR policy is owned by canonical Safe Core', () => {
@@ -144,9 +152,9 @@ test('structured PR output is normalized and locally rendered', () => {
   assert.match(formatted.body, /Review Evidence/);
 });
 
-test('v3 Review and Commit range evidence fail closed', () => {
+test('v4 Review and Commit range evidence fail closed', () => {
   const review = normalizeReviewRangeEvidence({
-    schemaVersion: 3,
+    schemaVersion: 4,
     kind: 'codex-review-range-evidence',
     totalCommits: 1,
     reviewedCommits: 1,
@@ -157,10 +165,10 @@ test('v3 Review and Commit range evidence fail closed', () => {
   });
   assert.strictEqual(review.status, 'available');
   assert.strictEqual(normalizeReviewRangeEvidence({ kind: 'codex-review-range-evidence', totalCommits: 1, reviewedCommits: 1, blockedCommits: 0, matches: [] }).status, 'invalid');
-  assert.strictEqual(normalizeReviewRangeEvidence({ kind: 'codex-review-range-evidence', totalCommits: 1, reviewedCommits: 1, blockedCommits: 0, matches: [{ commitOid, receipt: { ...reviewReceipt, schemaVersion: 2 } }] }).status, 'invalid');
+  assert.strictEqual(normalizeReviewRangeEvidence({ schemaVersion: 4, kind: 'codex-review-range-evidence', totalCommits: 1, reviewedCommits: 1, blockedCommits: 0, matches: [{ commitOid, receipt: { ...reviewReceipt, schemaVersion: 3 } }] }).status, 'invalid');
 
   const provenance = normalizeCommitRangeEvidence({
-    schemaVersion: 3,
+    schemaVersion: 4,
     kind: 'codex-commit-range-evidence',
     totalCommits: 1,
     generatedCommits: 1,
@@ -168,7 +176,7 @@ test('v3 Review and Commit range evidence fail closed', () => {
     matches: [{ commitOid, receipt: commitReceipt }]
   });
   assert.strictEqual(provenance.status, 'available');
-  assert.strictEqual(normalizeCommitRangeEvidence({ kind: 'codex-commit-range-evidence', totalCommits: 1, generatedCommits: 1, reviewedGeneratedCommits: 0, matches: [{ commitOid: '0'.repeat(40), receipt: commitReceipt }] }).status, 'invalid');
+  assert.strictEqual(normalizeCommitRangeEvidence({ schemaVersion: 4, kind: 'codex-commit-range-evidence', totalCommits: 1, generatedCommits: 1, reviewedGeneratedCommits: 0, matches: [{ commitOid: '0'.repeat(40), receipt: commitReceipt }] }).status, 'invalid');
 });
 
 test('Codex args remain fail-closed', () => {
@@ -275,5 +283,5 @@ test('Codex JSONL parser returns final agent message', () => {
       throw error;
     }
   }
-  console.log(`\n${passed} Family v3 unit/regression tests passed.`);
+  console.log(`\n${passed} Family v4 unit/regression tests passed.`);
 })().catch(error => { console.error(error); process.exit(1); });

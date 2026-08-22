@@ -8,9 +8,9 @@ Codex PR Safe is the narrative/provenance stage of the **Codex Safe Git Workflow
 
 ```text
 Codex Review Safe
-      ↓ Review Receipt v3
+      ↓ Review Receipt v4
 Codex Commit Safe
-      ↓ Commit Receipt v3
+      ↓ Commit Receipt v4
 Codex PR Safe
       ↓ local preview + verified provenance
       ↓ human submission
@@ -77,7 +77,7 @@ The only repository policy file is `.codex-safe.json` with `schemaVersion: 3`.
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/e6e25b502aa35a079f660346785cf283fe293b6d/codex-safe.schema.json",
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/4dc4de836625a8b70084531eb3321734eca675d0/codex-safe.schema.json",
   "schemaVersion": 3,
   "pr": {
     "language": "en",
@@ -117,11 +117,11 @@ PR Safe obtains two independent local evidence channels:
 
 ### Review evidence
 
-Codex Review Safe revalidates first-parent commit diffs against Review Receipt v3 history and returns counts such as reviewed and blocked commits.
+Codex Review Safe revalidates first-parent commit diffs against Review Receipt v4 history and returns counts such as reviewed and blocked commits.
 
 ### Commit provenance
 
-Codex Commit Safe stores pending Commit Receipt v3 records after generation. During PR evidence lookup it recomputes each first-parent commit's:
+Codex Commit Safe stores pending Commit Receipt v4 records after generation. During PR evidence lookup it recomputes each first-parent commit's:
 
 - parent HEAD;
 - full commit diff;
