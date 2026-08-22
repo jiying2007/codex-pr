@@ -4,6 +4,8 @@
 node_modules/**
 *.vsix
 *.zip
+extension.js
+src/**
 test.js
 test/**
 scripts/**
@@ -15,4 +17,3 @@ PUBLISHING.md
 .gitmodules
 .codex-safe.example.json
 SHA256SUMS
-src/codex-safe-core/.git
