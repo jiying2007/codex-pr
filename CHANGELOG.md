@@ -2,12 +2,14 @@
 
 ## Unreleased
 
-- Add a cross-platform local release CLI that prepares versions, enforces release gates, pushes `main`, and verifies the automated GitHub Release without creating local tags.
-- Treat current branch identity as part of PR freshness so switching to another branch at the same commit cannot reuse a stale preview or GitHub target.
-- Enforce configured `titleMaxLength` / `maxBodyChars` on edited preview output, while keeping Unicode title counting consistent with local validation.
-- Harden the preview Webview with no local resource roots, nonce-only script/style CSP, lightweight `getState` / `setState` draft restoration, and no `retainContextWhenHidden` memory retention.
-- Recheck repository freshness after GitHub remote resolution before opening the compare page, and keep Regenerate / Change Base available even when the current draft is invalid.
-- Add a dedicated hardening regression gate for stale identity, preview limits, CSP, Webview lifecycle, and egress checks.
+- Breaking: hard-switch to Codex Safe Core v2 through a commit-pinned Git submodule; remove copied vendoring, legacy bootstrap/startup activation, compatibility shims, and old Core ownership from the PR repository.
+- Replace `.codex-pr.json` with the unified `.codex-safe.json` schema v2 `pr` section; v1 policy is intentionally unsupported.
+- Route both the native PR flow and the optional GitHub Pull Requests title/description provider through the same Safe Core Semantic Context Budget, with generated/lock/binary metadata-only handling and a fixed native 8 MiB raw-diff safety ceiling.
+- Add deterministic Commit Receipt v2 provenance consumption in addition to Review Receipt v2 range evidence; commit message/content/parent mismatches invalidate provenance automatically.
+- Keep Testing locally deterministic and separate AI receipt coverage from human approval, build, and test evidence.
+- Standardize the Marketplace runtime on deterministic `dist/` staging plus `dist/codex-safe.schema.json`, with CI rejecting source/tests/scripts/submodule metadata in VSIX artifacts.
+- Unify CI/release gates across latest Linux/Windows/macOS and VS Code `1.90.0`, retain zh-CN coverage, and add SHA-256 plus full-SHA-pinned GitHub build-provenance attestations.
+- Rewrite English/Chinese user, security, and publishing documentation around the v2 product-family contract.
 
 ## 1.0.3
 
