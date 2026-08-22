@@ -12,7 +12,7 @@ SECURITY.md
 PUBLISHING.md
 .gitignore
 .gitattributes
-.codex-pr.json
-.codex-pr.example.json
+.gitmodules
+.codex-safe.example.json
 SHA256SUMS
-safe-core.lock.json
+src/codex-safe-core/.git

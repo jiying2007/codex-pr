@@ -1,8 +1,0 @@
-{
-  "language": "zh-CN",
-  "baseBranch": "origin/main",
-  "titleMaxLength": 90,
-  "maxBodyChars": 7000,
-  "includePullRequestTemplate": true,
-  "extraInstructions": "使用简洁工程语言；存在迁移影响时明确说明。"
-}
