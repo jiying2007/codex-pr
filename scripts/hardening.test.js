@@ -19,7 +19,7 @@ assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
 assert.strictEqual(core.REVIEW_RECEIPT_SCHEMA_VERSION, 4);
 assert.strictEqual(core.COMMIT_RECEIPT_SCHEMA_VERSION, 4);
 assert.strictEqual(core.PR_PROMPT_CONTRACT_VERSION, 1);
-assert.strictEqual(require('../package.json').version, '3.0.0');
+assert.strictEqual(require('../package.json').version, '4.0.0');
 const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
 assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the final Safe Core 4.0.0 main commit');
 
@@ -65,4 +65,11 @@ assert.match(extension, /validateEditedResult\(message\.title, message\.body, la
 assert.match(extension, /validateEditedResult\(state\.title, state\.body, state\)/);
 assert.match(extension, /await ensureFreshResult\(latest\);\s*latest\.compareUrl/s);
 
-console.log('Family v4 hardening and exact Safe Core 4.0.0 pin tests passed.');
+const release = fs.readFileSync(path.join(root, '.github', 'workflows', 'release.yml'), 'utf8');
+assert.match(release, /SBOM\.spdx\.json/);
+assert.match(release, /Attest immutable release provenance/);
+assert.match(release, /immutable assets will not be overwritten/);
+assert.doesNotMatch(release, /--clobber/);
+assert.doesNotMatch(release, /tags:\s*\[/);
+
+console.log('Family v4 hardening, exact Safe Core 4.0.0 pin and immutable release tests passed.');
