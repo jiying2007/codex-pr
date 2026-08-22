@@ -3,13 +3,25 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { previewHtml } = require('../src/preview');
+const core = require('../src/codex-safe-core');
 
 function ui(_zh, en, ...args) {
   return String(en).replace(/\{(\d+)\}/g, (_match, index) => String(args[Number(index)] ?? `{${index}}`));
 }
 
 const root = path.join(__dirname, '..');
+const expectedCoreCommit = 'e6e25b502aa35a079f660346785cf283fe293b6d';
+assert.strictEqual(core.SAFE_CORE_VERSION, 3);
+assert.strictEqual(core.SAFE_CONTRACT_VERSION, 2);
+assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
+assert.strictEqual(core.REVIEW_RECEIPT_SCHEMA_VERSION, 3);
+assert.strictEqual(core.COMMIT_RECEIPT_SCHEMA_VERSION, 3);
+assert.strictEqual(require('../package.json').version, '3.0.0');
+const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
+assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the final Core 3.0.1 commit');
+
 for (const forbidden of ['bootstrap.js', 'src/core.js', 'src/extension-entry.js']) {
   assert.strictEqual(fs.existsSync(path.join(root, forbidden)), false, `${forbidden} is a forbidden transitional entry/proxy`);
 }
@@ -52,4 +64,4 @@ assert.match(extension, /validateEditedResult\(message\.title, message\.body, la
 assert.match(extension, /validateEditedResult\(state\.title, state\.body, state\)/);
 assert.match(extension, /await ensureFreshResult\(latest\);\s*latest\.compareUrl/s);
 
-console.log('hardening regression tests passed.');
+console.log('Family v3 hardening and exact Core 3.0.1 pin tests passed.');
