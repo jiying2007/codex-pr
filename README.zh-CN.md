@@ -8,9 +8,9 @@ Codex PR Safe 是 **Codex Safe Git Workflow** 产品族的 PR narrative / proven
 
 ```text
 Codex Review Safe
-      ↓ Review Receipt v2
+      ↓ Review Receipt v3
 Codex Commit Safe
-      ↓ Commit Receipt v2
+      ↓ Commit Receipt v3
 Codex PR Safe
       ↓ 本地预览 + 可验证 provenance
       ↓ 人工最终提交
@@ -42,7 +42,7 @@ Codex PR Safe
 
 ## 安全边界
 
-Safe Core v2 要求 Codex CLI 具备：
+Safe Core v3 要求 Codex CLI 具备：
 
 - `--ask-for-approval never`
 - `exec --json`
@@ -73,12 +73,12 @@ Commit list 另有独立 `maxCommitBytes` 上限。
 
 ## 唯一仓库策略文件
 
-仓库只认 `.codex-safe.json`，且必须使用 `schemaVersion: 2`。
+仓库只认 `.codex-safe.json`，且必须使用 `schemaVersion: 3`。
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/d49dc356824b984166e81e42bb5f9d7abfb90099/codex-safe.schema.json",
-  "schemaVersion": 2,
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/e6e25b502aa35a079f660346785cf283fe293b6d/codex-safe.schema.json",
+  "schemaVersion": 3,
   "pr": {
     "language": "zh-CN",
     "baseBranch": "upstream/main",
@@ -117,11 +117,11 @@ PR Safe 使用两个独立本地证据通道。
 
 ### Review evidence
 
-Codex Review Safe 会把历史 Review Receipt v2 与真正 first-parent commit diff 重新匹配，返回 reviewed / blocked 等覆盖信息。
+Codex Review Safe 会把历史 Review Receipt v3 与真正 first-parent commit diff 重新匹配，返回 reviewed / blocked 等覆盖信息。
 
 ### Commit provenance
 
-Codex Commit Safe 在生成 Commit Message 后保存 pending Commit Receipt v2。PR 查询 range evidence 时，会重新计算每个 first-parent commit 的：
+Codex Commit Safe 在生成 Commit Message 后保存 pending Commit Receipt v3。PR 查询 range evidence 时，会重新计算每个 first-parent commit 的：
 
 - parent HEAD；
 - 完整 commit diff；

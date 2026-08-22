@@ -22,7 +22,14 @@ const {
   normalizeReviewRangeEvidence,
   normalizeCommitRangeEvidence
 } = require('./src/pr-domain');
-const { validatePolicySection } = require('./src/codex-safe-core/policy');
+const {
+  SAFE_CORE_VERSION,
+  REVIEW_RECEIPT_SCHEMA_VERSION,
+  COMMIT_RECEIPT_SCHEMA_VERSION,
+  validateReviewReceipt,
+  validateCommitReceipt
+} = require('./src/codex-safe-core/safe-contract');
+const { POLICY_SCHEMA_VERSION, validatePolicySection } = require('./src/codex-safe-core/policy');
 const { prepareCommand } = require('./src/process');
 const { isForkTopology, readHeadBlob } = require('./src/git');
 
@@ -37,21 +44,27 @@ function initMainRepository(root) {
 }
 
 const reviewReceipt = {
-  schemaVersion: 2,
-  kind: 'codex-review-safe',
-  headOid: '1'.repeat(40),
-  indexFingerprint: '2'.repeat(64),
+  schemaVersion: 3,
+  kind: 'codex-review',
+  subject: {
+    type: 'git-index',
+    headOid: '1'.repeat(40),
+    indexFingerprint: '2'.repeat(64),
+    stagedFileCount: 1
+  },
   diffFingerprint: '3'.repeat(64),
   policyFingerprint: '4'.repeat(64),
-  stagedFileCount: 1,
   qualityVerdict: 'no_findings',
   readinessVerdict: 'needs_evidence',
-  mechanicalGate: 'not_run',
+  mechanicalGate: 'pass',
+  coverageVerdict: 'complete',
+  model: 'gpt-test',
+  codexVersion: 'codex-cli 9.9.9',
   createdAt: '2026-08-22T00:00:00.000Z'
 };
 const commitOid = 'a'.repeat(40);
 const commitReceipt = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   kind: 'codex-commit-safe',
   headOid: 'b'.repeat(40),
   indexFingerprint: 'c'.repeat(64),
@@ -59,9 +72,22 @@ const commitReceipt = {
   messageFingerprint: 'e'.repeat(64),
   policyFingerprint: 'f'.repeat(64),
   reviewReceiptFingerprint: '1'.repeat(64),
+  model: 'gpt-test',
+  codexVersion: 'codex-cli 9.9.9',
   createdAt: '2026-08-22T00:00:00.000Z',
   commitOid
 };
+
+test('Family v3 protocol line is canonical', () => {
+  assert.strictEqual(SAFE_CORE_VERSION, 3);
+  assert.strictEqual(POLICY_SCHEMA_VERSION, 3);
+  assert.strictEqual(REVIEW_RECEIPT_SCHEMA_VERSION, 3);
+  assert.strictEqual(COMMIT_RECEIPT_SCHEMA_VERSION, 3);
+  assert.ok(validateReviewReceipt(reviewReceipt));
+  assert.ok(validateCommitReceipt(commitReceipt));
+  assert.strictEqual(validateReviewReceipt({ ...reviewReceipt, schemaVersion: 2 }), null);
+  assert.strictEqual(validateCommitReceipt({ ...commitReceipt, schemaVersion: 2 }), null);
+});
 
 test('repository PR policy is owned by canonical Safe Core', () => {
   assert.throws(() => validatePolicySection('pr', { codexPath: '/tmp/evil' }), /unsupported/i);
@@ -118,18 +144,23 @@ test('structured PR output is normalized and locally rendered', () => {
   assert.match(formatted.body, /Review Evidence/);
 });
 
-test('v2 Review and Commit range evidence fail closed', () => {
+test('v3 Review and Commit range evidence fail closed', () => {
   const review = normalizeReviewRangeEvidence({
+    schemaVersion: 3,
     kind: 'codex-review-range-evidence',
     totalCommits: 1,
     reviewedCommits: 1,
     blockedCommits: 0,
+    needsEvidenceCommits: 1,
+    incompleteCommits: 0,
     matches: [{ commitOid, receipt: reviewReceipt }]
   });
   assert.strictEqual(review.status, 'available');
   assert.strictEqual(normalizeReviewRangeEvidence({ kind: 'codex-review-range-evidence', totalCommits: 1, reviewedCommits: 1, blockedCommits: 0, matches: [] }).status, 'invalid');
+  assert.strictEqual(normalizeReviewRangeEvidence({ kind: 'codex-review-range-evidence', totalCommits: 1, reviewedCommits: 1, blockedCommits: 0, matches: [{ commitOid, receipt: { ...reviewReceipt, schemaVersion: 2 } }] }).status, 'invalid');
 
   const provenance = normalizeCommitRangeEvidence({
+    schemaVersion: 3,
     kind: 'codex-commit-range-evidence',
     totalCommits: 1,
     generatedCommits: 1,
@@ -160,17 +191,18 @@ test('Codex input and snapshot checks preserve repository boundaries', () => {
   assert.match(input, /--- TEXT DIFF START ---/);
 });
 
-test('HEAD-controlled .codex-safe.json ignores working-tree edits', async () => {
+test('HEAD-controlled .codex-safe.json ignores working-tree edits and rejects v2', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-pr-head-test-'));
   try {
     initMainRepository(root);
-    fs.writeFileSync(path.join(root, '.codex-safe.json'), '{"schemaVersion":2,"pr":{"language":"en"}}\n');
+    fs.writeFileSync(path.join(root, '.codex-safe.json'), '{"schemaVersion":3,"pr":{"language":"en"}}\n');
     run('git', ['add', '.codex-safe.json'], root);
     run('git', ['commit', '-m', 'test: add policy'], root);
-    fs.writeFileSync(path.join(root, '.codex-safe.json'), '{"schemaVersion":2,"pr":{"language":"zh-CN"}}\n');
+    fs.writeFileSync(path.join(root, '.codex-safe.json'), '{"schemaVersion":3,"pr":{"language":"zh-CN"}}\n');
     const blob = await readHeadBlob(root, '.codex-safe.json', 32 * 1024);
     assert.ok(blob && !blob.symlink && !blob.tooLarge);
     assert.strictEqual(JSON.parse(blob.text).pr.language, 'en');
+    assert.throws(() => validatePolicySection('pr', { schemaVersion: 2 }), /unsupported/i);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -243,5 +275,5 @@ test('Codex JSONL parser returns final agent message', () => {
       throw error;
     }
   }
-  console.log(`\n${passed} unit/regression tests passed.`);
+  console.log(`\n${passed} Family v3 unit/regression tests passed.`);
 })().catch(error => { console.error(error); process.exit(1); });
