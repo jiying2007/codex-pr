@@ -8,9 +8,9 @@ Codex PR Safe is the narrative/provenance stage of the **Codex Safe Git Workflow
 
 ```text
 Codex Review Safe
-      ↓ Review Receipt v2
+      ↓ Review Receipt v3
 Codex Commit Safe
-      ↓ Commit Receipt v2
+      ↓ Commit Receipt v3
 Codex PR Safe
       ↓ local preview + verified provenance
       ↓ human submission
@@ -42,7 +42,7 @@ Shared safety/runtime infrastructure comes exclusively from the pinned [`codex-s
 
 ## Safety boundary
 
-Safe Core v2 requires the Codex CLI capabilities needed for:
+Safe Core v3 requires the Codex CLI capabilities needed for:
 
 - `--ask-for-approval never`
 - `exec --json`
@@ -73,12 +73,12 @@ Commit-list context has an independent `maxCommitBytes` ceiling.
 
 ## Repository policy
 
-The only repository policy file is `.codex-safe.json` with `schemaVersion: 2`.
+The only repository policy file is `.codex-safe.json` with `schemaVersion: 3`.
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/d49dc356824b984166e81e42bb5f9d7abfb90099/codex-safe.schema.json",
-  "schemaVersion": 2,
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/e6e25b502aa35a079f660346785cf283fe293b6d/codex-safe.schema.json",
+  "schemaVersion": 3,
   "pr": {
     "language": "en",
     "baseBranch": "upstream/main",
@@ -117,11 +117,11 @@ PR Safe obtains two independent local evidence channels:
 
 ### Review evidence
 
-Codex Review Safe revalidates first-parent commit diffs against Review Receipt v2 history and returns counts such as reviewed and blocked commits.
+Codex Review Safe revalidates first-parent commit diffs against Review Receipt v3 history and returns counts such as reviewed and blocked commits.
 
 ### Commit provenance
 
-Codex Commit Safe stores pending Commit Receipt v2 records after generation. During PR evidence lookup it recomputes each first-parent commit's:
+Codex Commit Safe stores pending Commit Receipt v3 records after generation. During PR evidence lookup it recomputes each first-parent commit's:
 
 - parent HEAD;
 - full commit diff;

@@ -1,6 +1,6 @@
 # Publishing
 
-Codex PR Safe releases are immutable, reproducible GitHub Actions builds from a committed source revision, locked npm graph and commit-pinned Codex Safe Core v2 submodule.
+Codex PR Safe releases are immutable, reproducible GitHub Actions builds from a committed source revision, locked npm graph and commit-pinned Codex Safe Core v3 submodule.
 
 ## Release source requirements
 
@@ -19,7 +19,7 @@ A release is valid only when:
 
 - package and lockfile metadata agree;
 - the Core path is the canonical commit-pinned Git submodule;
-- Safe Core v2 contract/policy checks pass;
+- Safe Core v3 contract/policy checks pass;
 - native PR, provider, provenance and Webview hardening tests pass;
 - latest VS Code Extension Host tests pass on Linux, Windows and macOS;
 - minimum VS Code `1.90.0` passes;
