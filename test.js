@@ -204,7 +204,7 @@ test('settings scopes and canonical schema are terminal-state', () => {
     if (key === 'safeCodexPr.codexPath') continue;
     assert.strictEqual(value.scope, 'application', `${key} must be application scoped`);
   }
-  assert.deepStrictEqual(pkg.contributes.jsonValidation, [{ fileMatch: '.codex-safe.json', url: './src/codex-safe-core/codex-safe.schema.json' }]);
+  assert.deepStrictEqual(pkg.contributes.jsonValidation, [{ fileMatch: '.codex-safe.json', url: './dist/codex-safe.schema.json' }]);
   assert.strictEqual(pkg.extensionKind[0], 'workspace');
 });
 

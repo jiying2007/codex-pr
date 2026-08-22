@@ -22,9 +22,9 @@ function createWorkspace() {
   run('git', ['config', 'user.name', 'Codex PR Safe Test'], root);
   fs.mkdirSync(path.join(root, '.github'));
   fs.writeFileSync(path.join(root, 'app.js'), 'module.exports = 1;\n');
-  fs.writeFileSync(path.join(root, '.codex-pr.json'), '{"language":"en"}\n');
+  fs.writeFileSync(path.join(root, '.codex-safe.json'), '{"schemaVersion":2,"pr":{"language":"en"}}\n');
   fs.writeFileSync(path.join(root, '.github', 'pull_request_template.md'), 'COMMITTED TEMPLATE MARKER\n');
-  run('git', ['add', 'app.js', '.codex-pr.json', '.github/pull_request_template.md'], root);
+  run('git', ['add', 'app.js', '.codex-safe.json', '.github/pull_request_template.md'], root);
   run('git', ['commit', '-m', 'chore: initial'], root);
   run('git', ['checkout', '-b', 'feature/pr-safe'], root);
   fs.writeFileSync(path.join(root, 'app.js'), 'module.exports = 2;\n');
@@ -32,7 +32,7 @@ function createWorkspace() {
   run('git', ['add', 'app.js', 'feature.js'], root);
   run('git', ['commit', '-m', 'feat: add safe PR generation'], root);
 
-  fs.writeFileSync(path.join(root, '.codex-pr.json'), '{"language":"zh-CN","extraInstructions":"UNCOMMITTED CONFIG INJECTION"}\n');
+  fs.writeFileSync(path.join(root, '.codex-safe.json'), '{"schemaVersion":2,"pr":{"language":"zh-CN","extraInstructions":"UNCOMMITTED CONFIG INJECTION"}}\n');
   fs.writeFileSync(path.join(root, '.github', 'pull_request_template.md'), 'UNCOMMITTED TEMPLATE INJECTION\n');
   fs.writeFileSync(path.join(root, 'local-only.txt'), 'not committed\n');
   return root;

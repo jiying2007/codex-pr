@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.1.0
+
 - Pin the final Codex Safe Core 2.1 baseline with canonical repository-policy validation, closed receipt contracts, hardened process execution, Git token validation, deep-frozen policy values, and Semantic Context budgeting.
 - Remove the ambiguous PR product `src/core.js` boundary; keep pure PR algorithms in `pr-domain.js` and HEAD/User policy composition in `policy.js`.
 - Separate application-level user style preferences from committed HEAD repository instructions in the model prompt so trust provenance remains explicit.
