@@ -1,119 +1,177 @@
 # Security
 
-## Data flow
+Codex PR Safe follows the **Codex Safe Core v2** contract. Shared security/runtime primitives are owned by the pinned `codex-safe-core` submodule; this repository owns PR-specific Git topology, preview, provider integration and provenance presentation.
 
-Codex PR Safe sends only explicitly collected committed Git context and PR-generation instructions to the configured Codex service. The repository itself is not used as the Codex working directory.
+## Trust boundaries
 
-The supplied context can include commit subjects, diff stat, name status, textual diff, a small committed PR template, and a committed `.codex-pr.json` policy. This source-derived material still leaves the local machine for model inference. Use the extension only where your organization’s source-code and data policy permits it.
+### 1. Workspace
 
-## Execution boundary
+- Restricted Mode is unsupported.
+- Virtual workspaces are unsupported.
+- Runtime commands enforce Workspace Trust.
+- Only trusted filesystem-backed Git workspaces are analyzed.
 
-For PR generation, the extension:
+### 2. Git repository
 
-- runs Codex from a newly created empty temporary directory;
-- requests a read-only sandbox and no approvals;
-- ignores user Codex config and project execution rules for the request;
-- disables unnecessary shell, execution, web, app, agent, hook, goal, memory, and plugin-related features where supported;
-- validates Structured Output locally before formatting PR Markdown;
-- never automatically fetches, pulls, pushes, creates, updates, or submits a pull request.
+Native PR generation is bound to:
 
-Organization-managed Codex requirements, managed hooks, MDM settings, or cloud policy may have higher precedence. The extension does not attempt to bypass organization policy.
+- HEAD OID;
+- current local branch;
+- selected Base OID;
+- normalized Base ref.
 
-## Configuration boundary
+This identity is checked around input collection, after model execution, after preview preparation, and before every Copy/Open egress action. Any mismatch marks the result stale.
 
-All `safeCodexPr.*` VS Code settings are application-scoped User Settings. Workspace and folder settings cannot change PR-generation policy.
+Only committed `base...HEAD` changes are model input. Staged/unstaged working-tree changes are intentionally excluded.
 
-Repository `.codex-pr.json` is treated as repository-controlled policy and is read from the exact committed `HEAD` object used for the PR snapshot. Uncommitted edits do not affect generation. Repository policy cannot configure the Codex executable, model, environment variables, working directory, or arbitrary commands.
+### 3. Codex executable
 
-PR templates are also read from committed `HEAD`. Git symbolic-link entries are not followed, preventing repository-controlled paths from escaping to host filesystem content.
+Safe Core performs capability negotiation and requires the CLI features needed for:
 
-Configured `titleMaxLength` and `maxBodyChars` limits are enforced again after preview editing, before any Copy/Open egress action. The browser preview shows the effective limits, but the extension-host validation remains authoritative; title length uses Unicode code points so surrogate pairs are not miscounted by HTML `maxlength` semantics.
+- `--ask-for-approval never`;
+- `exec --json`;
+- ephemeral execution;
+- ignored user/project Codex rules for the request;
+- read-only sandbox;
+- output schema;
+- explicit Safe Core configuration overrides.
 
-## Repository consistency
+Shell, unified exec, web search, apps, multi-agent, remote plugins, hooks, goals, memories and related capabilities are disabled.
 
-A generated PR must describe the exact committed state and branch identity that were analyzed. The extension snapshots:
+Missing required capabilities or rejected safety arguments fail closed. There is no compatibility fallback that weakens the contract.
 
-- the current `HEAD` object ID;
-- the current local branch name;
-- the selected Base object ID; and
-- the normalized Base ref.
+Codex runs from a temporary directory, not the repository.
 
-The identity is checked before and after PR input collection, after Codex returns, after preview preparation, and again before every Copy/Open egress action. GitHub Open performs another check after remote/publish resolution immediately before copying and opening the compare page. Any mismatch fails safe. A stale preview disables Copy/Open until regeneration.
+### 4. Repository policy and templates
 
-Including the branch name prevents a checkout to a different branch that happens to point at the same commit from reusing a preview whose compare range or push target belongs to the previous branch.
+The only repository policy is `.codex-safe.json` schema v2. PR consumes only the `pr` section from committed HEAD.
 
-A newer generation request supersedes an older in-flight request for the same repository. Regenerate and Change Base remain available even if the current edited draft fails title/body validation so the user can recover without exporting invalid content.
+PR templates are also read from HEAD. Git symbolic links are not followed.
 
-## Preview Webview boundary
+Repository policy cannot configure:
 
-The editable preview is intentionally isolated:
+- Codex executable;
+- model;
+- environment variables;
+- working directory;
+- arbitrary commands.
 
-- scripts are enabled only because the preview needs local button/edit interactions;
-- `localResourceRoots` is empty, so the Webview cannot load extension/workspace files as local resources;
-- the Content Security Policy defaults to no sources and permits only nonce-authorized inline style/script blocks;
-- `retainContextWhenHidden` is not used;
-- small title/body draft state is preserved with VS Code Webview `getState` / `setState` instead of keeping the full hidden Webview context alive; and
-- all edited title/body data is validated again in the extension host before clipboard or browser egress.
+`safeCodexPr.codexPath` is machine-scoped. Remaining user preferences are application-scoped.
 
-A fresh render uses a new draft identity, so a regenerated PR cannot be overwritten by draft state saved for the previous render.
+### 5. Model output
+
+AI output is untrusted structured data. PR Safe validates a closed schema with bounded:
+
+- title;
+- summary;
+- changes;
+- risks;
+- review notes;
+- risk level;
+- breaking-change flag.
+
+Medium/high risk and breaking-change results require concrete risks.
+
+The model cannot control the Testing section. Test execution is locally marked unverified unless a separate trusted evidence channel is introduced in the future.
+
+## Prompt-injection boundary
+
+All repository-derived material is untrusted, including:
+
+- diffs/patches;
+- commit messages;
+- filenames;
+- PR templates;
+- repository policy;
+- previous generated text.
+
+Prompt instructions explicitly forbid following commands or policy found inside that data.
+
+## Semantic Context Budget
+
+`maxDiffBytes` is the model-context budget, not a raw first-N-byte truncation rule.
+
+Safe Core parses unified diff by file:
+
+- source files receive a fair per-file allocation;
+- generated/lock files are metadata-only;
+- binary files are metadata-only;
+- oversized source files retain bounded head/tail context.
+
+The native PR path has a fixed 8 MiB raw-diff safety ceiling. Commit-list context has its own `maxCommitBytes` limit.
+
+The optional GitHub Pull Requests provider applies the same Safe Core semantic-budget policy to provider patch input, so the native and provider paths do not diverge.
 
 ## Base and remote safety
 
-Codex PR Safe does not run network Git commands. Base detection uses only local refs.
+PR Safe does not run implicit Git network operations. Base detection uses local refs and actual configured remotes.
 
-Fork behavior is determined from actual configured remotes rather than branch-name heuristics. A slash in a branch name does not imply a remote. If no high-confidence Base can be inferred, the extension asks the user instead of selecting an arbitrary ref.
+A slash in a branch name is not treated as a remote prefix unless the prefix is a real configured remote.
 
-GitHub Compare targets are derived from configured remotes, current push configuration, and published local remote refs. Opening GitHub never submits a PR.
+If Base confidence is insufficient, the user is asked to choose rather than accepting an arbitrary ref.
 
-## Structured output and test claims
+GitHub Compare URLs are derived from local remote topology and published remote refs. Opening GitHub never submits a PR.
 
-Codex output must match a closed JSON Schema and is validated again locally. Summary and Changes must be non-empty. Medium/high risk and breaking-change results must include concrete risk entries.
+## Preview Webview boundary
 
-Codex PR Safe does not ingest a verified test-run result. Therefore test execution status is not model-controlled: the Testing section is generated locally and explicitly states that execution was not verified by Codex PR Safe.
+The editable preview:
 
-If Codex Review Safe is installed, PR may query its read-only Extension API and match receipts to first-parent commits by parent OID and committed-diff fingerprint. The deterministic Review Evidence section always states that AI receipts are not human approval and do not establish requirements, build, or test readiness. Missing or invalid companion evidence never enables additional Git or network actions.
+- uses `localResourceRoots: []`;
+- uses a restrictive Content Security Policy;
+- avoids `retainContextWhenHidden`;
+- stores only small draft state through Webview state APIs;
+- validates edited title/body again in the extension host before clipboard/browser egress.
+
+A fresh generation creates a fresh draft identity so stale webview state cannot overwrite a new result.
+
+## Review evidence and Commit provenance
+
+Review evidence is obtained from Codex Review Safe through its read-only API and independently matched against first-parent committed diffs.
+
+Commit provenance is obtained from Codex Commit Safe. Pending Commit Receipt v2 records are not trusted directly: Commit Safe recomputes each real commit's parent, full diff and final commit message before binding to `commitOid`.
+
+PR Safe displays deterministic receipt coverage locally. Receipts are AI workflow evidence only; they do not establish human approval, requirements compliance, build success or test success.
+
+Missing/invalid companion evidence never enables additional Git or network actions.
 
 ## Process handling
 
-Native executables are started without a shell. On Windows, `.cmd` and `.bat` shims are invoked through `cmd.exe` with explicit quoting and `windowsVerbatimArguments`.
-
-Timeouts, cancellation, process-tree termination, stdout/stderr size limits, expected stdin `EPIPE`, and Codex executable checks are handled explicitly.
-
-Before generation, the extension checks `codex --version`, `codex --help`, and `codex exec --help` to confirm the CLI exposes the safety and structured-output capabilities required by the current argv contract. Capability results are cached by executable/version.
+Process execution is delegated to Safe Core. Native processes run without an unrestricted shell. Windows script shims use explicit quoting. Timeout, cancellation, process-tree termination and stdout/stderr limits are enforced.
 
 ## Localization boundary
 
-Manifest strings use `package.nls.json` / `package.nls.zh-cn.json`. Runtime user-facing strings use the VS Code runtime localization path under `l10n/`.
-
-CI verifies manifest key parity, runtime bundle key parity, runtime source-key coverage, and a Simplified-Chinese Extension Host smoke so shipped localization is exercised rather than only statically compared.
+Manifest localization uses `package.nls.*`; runtime localization uses the `l10n/` bundles. CI verifies key parity/source coverage and a Simplified-Chinese Extension Host smoke.
 
 ## Logging
 
-The persistent Output channel must not contain source code, committed diff contents, generated PR text, secrets, raw Codex stderr, or absolute repository paths. It records only lifecycle information and error identifiers suitable for troubleshooting.
+Persistent operational logs must not contain:
 
-Interactive error notifications can show a bounded error detail to the active user, but that detail is not written to the persistent Output channel.
+- source/committed diff content;
+- generated PR text;
+- secrets;
+- raw Codex stderr;
+- absolute repository paths.
+
+## Data flow
+
+Semantic PR context leaves the local machine for the configured Codex service. Use the extension only when allowed by the organization's source-code/data policy.
+
+Organization-managed Codex policy, managed hooks, MDM or cloud controls may still apply; the extension does not attempt to bypass them.
 
 ## Release supply chain
 
-GitHub Actions validation jobs run with read-only repository permissions. Only the final release job receives `contents: write`.
+Marketplace/Release runtime is `dist/extension.js`; the canonical policy schema is `dist/codex-safe.schema.json`. CI rejects source, tests, scripts and submodule metadata in the VSIX.
 
-Release tags must:
+Validation jobs use read-only repository permissions. Only the final release job receives:
 
-- use `vMAJOR.MINOR.PATCH`;
-- match `package.json.version` and committed lockfile metadata;
-- point to a commit reachable from `main`; and
-- contain only the permanent `ci.yml` and `release.yml` workflows, with no bootstrap/finalizer markers.
+- `contents: write`;
+- `id-token: write`;
+- `attestations: write`.
 
-The release gate runs:
+Release validation covers lock integrity, localization, provider/unit regressions, latest Linux/Windows/macOS Extension Host, minimum VS Code `1.90.0`, Simplified-Chinese smoke, VSIX boundary audit and SHA-256 generation.
 
-- lockfile integrity verification;
-- manifest/runtime localization parity and runtime source-key coverage;
-- unit/regression tests, including dedicated stale-identity and Webview-hardening checks;
-- latest VS Code Extension Host tests on Linux, Windows, and macOS;
-- minimum supported VS Code `1.90.0` compatibility testing;
-- Simplified-Chinese localization smoke testing;
-- official `@vscode/vsce` packaging;
-- VSIX content checks; and
-- SHA-256 generation.
+GitHub Actions are pinned to immutable full commit SHAs. Release artifacts (`.vsix` and `SHA256SUMS`) receive GitHub build-provenance attestations.
 
-Third-party GitHub Actions are pinned to immutable commit SHAs and maintained through Dependabot.
+## Reporting a vulnerability
+
+Do not disclose security-sensitive issues publicly before remediation. Use the repository's GitHub security reporting mechanism when available, or contact the maintainer privately through the repository owner profile.
