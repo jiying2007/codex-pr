@@ -1,4 +1,4 @@
-# rerun-original-tests-schema-only: eadca528e4d5470014fdb76c0138a299ff2119f4
+# rerun-policy-v2-integration-fixtures: eadca528e4d5470014fdb76c0138a299ff2119f4
 name: Finalize 2.1
 on:
   push:
@@ -28,13 +28,24 @@ jobs:
           npm run release:prepare -- 2.1.0
           node <<'NODE'
           const fs = require('fs');
-          const file = 'test.js';
-          const oldValue = './src/codex-safe-core/codex-safe.schema.json';
-          const newValue = './dist/codex-safe.schema.json';
-          let source = fs.readFileSync(file, 'utf8');
-          if (!source.includes(oldValue)) throw new Error('terminal schema assertion source path not found');
-          source = source.replace(oldValue, newValue);
-          fs.writeFileSync(file, source);
+          let test = fs.readFileSync('test.js', 'utf8');
+          const oldSchema = './src/codex-safe-core/codex-safe.schema.json';
+          const newSchema = './dist/codex-safe.schema.json';
+          if (!test.includes(oldSchema)) throw new Error('terminal schema assertion source path not found');
+          fs.writeFileSync('test.js', test.replace(oldSchema, newSchema));
+
+          const file = 'test/integration/runTest.js';
+          let integration = fs.readFileSync(file, 'utf8');
+          const replacements = [
+            ["fs.writeFileSync(path.join(root, '.codex-pr.json'), '{\"language\":\"en\"}\\n');", "fs.writeFileSync(path.join(root, '.codex-safe.json'), '{\"schemaVersion\":2,\"pr\":{\"language\":\"en\"}}\\n');"],
+            ["run('git', ['add', 'app.js', '.codex-pr.json', '.github/pull_request_template.md'], root);", "run('git', ['add', 'app.js', '.codex-safe.json', '.github/pull_request_template.md'], root);"],
+            ["fs.writeFileSync(path.join(root, '.codex-pr.json'), '{\"language\":\"zh-CN\",\"extraInstructions\":\"UNCOMMITTED CONFIG INJECTION\"}\\n');", "fs.writeFileSync(path.join(root, '.codex-safe.json'), '{\"schemaVersion\":2,\"pr\":{\"language\":\"zh-CN\",\"extraInstructions\":\"UNCOMMITTED CONFIG INJECTION\"}}\\n');"]
+          ];
+          for (const [from, to] of replacements) {
+            if (!integration.includes(from)) throw new Error(`legacy integration fixture not found: ${from}`);
+            integration = integration.replace(from, to);
+          }
+          fs.writeFileSync(file, integration);
           NODE
           python3 - <<'PY'
           from pathlib import Path
