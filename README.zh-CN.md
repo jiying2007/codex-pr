@@ -2,218 +2,145 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-在 VS Code 中使用本地 OpenAI Codex CLI，基于**已经提交的 Git 变更**安全生成结构化 Pull Request 标题和正文。
+基于**已经提交的 Git 变更**生成经过本地校验的 Pull Request 标题和正文，叠加确定性 provenance，并始终由用户完成最终远端写操作。
 
-> **为什么叫 “Safe”？** Codex PR Safe 是 [Codex Commit Safe](https://github.com/jiying2007/codex-commit) 与 [Codex Review Safe](https://github.com/jiying2007/codex-review) 的 PR 配套扩展。它刻意缩小信任边界：只分析已提交 `base...HEAD`、仓库规则和 PR Template 固定读取 HEAD、使用 Structured Output、拒绝 stale result、限制 Codex 能力、不隐式执行 Git 网络操作，并且不会自动提交远端 PR。
-
-## 主要能力
-
-- VS Code Source Control 一键生成 PR 标题和正文
-- **只分析已提交变更**（`merge-base...HEAD`）；staged / unstaged working tree 改动不会混入
-- Fork-aware Base 选择和 GitHub Compare 支持
-- PR 生成内容支持 **简体中文 / English**
-- VS Code 命令、设置、进度、警告、预览操作和关键错误支持 **英文 / 简体中文**运行时本地化
-- VS Code UI 语言与 PR 生成语言相互独立
-- Codex Structured Output + 本地严格 Schema 校验 + 本地 Markdown 格式化
-- Testing 状态确定性：没有可信执行证据时，Codex PR Safe 永远不会声称“测试已通过”
-- 生成期间及每一次 Copy/Open 前校验 HEAD + Base OID snapshot
-- `.codex-pr.json` 和 PR Template 固定读取 HEAD；未提交修改和仓库符号链接不能改变请求
-- 可选汇总提交范围内匹配的 Codex Review Safe 凭据，并明确与人工批准和测试证据分离
-- CI 覆盖 Windows `.exe/.cmd/.bat`、Linux、macOS
-- 永远不会自动 `fetch`、`pull`、`push`、创建 PR、更新 PR 或提交远端 PR
-
-## 中英文支持
-
-VS Code 界面语言通过标准 runtime localization 自动跟随编辑器 locale：
-
-- English VS Code → English 命令/消息/预览文案
-- 简体中文 VS Code → 简体中文命令/消息/预览文案
-
-PR 生成语言单独由以下配置控制：
-
-```json
-{
-  "safeCodexPr.language": "zh-CN"
-}
-```
-
-或：
-
-```json
-{
-  "safeCodexPr.language": "en"
-}
-```
-
-因此中文 UI 可以生成英文 PR，英文 UI 也可以生成中文 PR。
-
-## 工作流
+Codex PR Safe 是 **Codex Safe Git Workflow** 产品族的 PR narrative / provenance 阶段：
 
 ```text
-Code
-  ↓
 Codex Review Safe
-  ↓
+      ↓ Review Receipt v2
 Codex Commit Safe
-  ↓
-已提交的功能分支
-  ↓
+      ↓ Commit Receipt v2
 Codex PR Safe
-  ↓
-本地可编辑预览
-  ↓
-GitHub Compare
-  ↓
-人工最终提交
+      ↓ 本地预览 + 可验证 provenance
+      ↓ 人工最终提交
 ```
 
-## 环境要求
+所有共享安全与运行时基础设施只来自固定 commit 的 [`codex-safe-core`](https://github.com/jiying2007/codex-safe-core) Git submodule。
 
-- VS Code 1.90.0+
-- Git
-- VS Code 环境中可执行的 OpenAI Codex CLI
-- 已信任、基于本地文件系统的 Git 工作区
+## 核心能力
 
-先确认：
+- 只分析已提交的 `base...HEAD`；本地 staged/unstaged working-tree 修改不会混入。
+- 基于本地 Git refs 和 fork topology 保守选择 Base，不隐式联网。
+- 生成结构化 PR title / summary / changes / risks / review notes，支持简体中文和英文。
+- 主 PR 命令与 GitHub Pull Requests title/description provider **统一使用 Safe Core Semantic Context Budget**。
+- Testing 状态由本地确定性生成，模型不能声称未验证的测试成功。
+- 消费 Codex Review Safe range evidence。
+- 消费 Codex Commit Safe range evidence，并展示经过重新验证的 Commit provenance。
+- HEAD、当前分支、Base OID、Base ref 变化时拒绝 stale result。
+- Copy/Open 前提供本地可编辑预览，并再次校验仓库状态。
 
-```bash
-codex --version
-codex --help
-codex exec --help
-```
+## 明确不会做的事
 
-## 安装
+- 不隐式执行 `git fetch` / `git pull` / `git push`。
+- 不自动创建或提交远端 Pull Request。
+- 不修改项目源码。
+- 不给 Codex Shell 权限。
+- 不给 Codex 网络/Web Search 权限。
+- 不把 AI Review Receipt 当成人工批准。
+- 不把生成文案当成测试证据。
 
-从 GitHub Release 下载 VSIX 后安装：
+## 安全边界
 
-```bash
-code --install-extension codex-pr-safe-1.0.2.vsix
-```
+Safe Core v2 要求 Codex CLI 具备：
 
-或在 VS Code 中：
+- `--ask-for-approval never`
+- `exec --json`
+- ephemeral execution
+- 本次请求忽略用户/项目 Codex rules
+- read-only sandbox
+- Structured Output schema
+- 显式关闭 shell、unified exec、web search、apps、hooks、memories、multi-agent 等无关能力
 
-```text
-Extensions → ... → Install from VSIX...
-```
+缺失必要安全能力时直接 fail closed 并要求升级；**不存在 legacy CLI fallback**。
 
-安装后执行：
+Diff、Commit Message、文件名、PR Template、仓库策略、历史生成结果等仓库派生文本全部视为不可信数据，不能覆盖安全/证据规则。
 
-```text
-Ctrl+Shift+P → Codex PR Safe: 检查环境
-```
+## 大型 PR 的 Semantic Context
 
-## 使用方法
+`maxDiffBytes` 表示**模型 Semantic Context 预算**，不是“取前 N 字节”或“超过就直接拒绝”的阈值。
 
-1. 提交本次 PR 应包含的代码变更。
-2. 确认本地 Base ref 足够新；需要时自行执行 `git fetch`。
-3. 打开 **Source Control**。
-4. 执行 **Codex PR Safe: 生成 PR**，或点击 Source Control 工具栏图标。
-5. 在本地预览中检查并编辑标题和正文。
-6. 复制结果或打开 GitHub Compare 页面。
-7. 最终人工确认后再提交远端 Pull Request。
+Safe Core 按 unified diff 文件块处理：
 
-Source Control 中 **Generate PR** 使用 `git-pull-request` 图标，**Regenerate PR** 使用 `redo`，避免与 Git 原生 Refresh 图标冲突。
+- source 文件公平分配预算；
+- generated/lock 文件只保留元数据；
+- binary 文件只保留元数据；
+- 过大的 source 文件保留受控头尾上下文；
+- 主 PR 路径的原始 diff 固定 8 MiB 安全上限；
+- GitHub Pull Requests provider 的 patch context 使用同一套语义预算策略。
 
-## Base 与 Fork 逻辑
+Commit list 另有独立 `maxCommitBytes` 上限。
 
-Codex PR Safe 不会联网查询默认分支，Base 选择刻意保持保守：
+## 唯一仓库策略文件
 
-1. 有效的 `safeCodexPr.baseBranch` / 已提交 `.codex-pr.json` 明确配置优先。
-2. 检测到典型 fork 拓扑（`origin` 是 fork，`upstream` 是另一个 GitHub 仓库）时，优先本地 `upstream/HEAD`。
-3. 其他情况优先本地 `origin/HEAD`，然后 `upstream/HEAD`。
-4. 再考虑 `origin/main`、`upstream/main`、`main`、`master`、`develop`、`dev` 等常见 refs。
-5. 没有高置信度 Base 时不猜，直接要求用户选择。
-
-分支名包含 `/` 不代表它一定是 remote。例如 `release/1.0` 会保持为完整本地分支，除非 `release` 本身确实是已配置的 Git remote。
-
-当前分支的 GitHub push target 按以下顺序解析：
-
-1. `branch.<name>.pushRemote`
-2. `remote.pushDefault`
-3. `branch.<name>.remote`
-4. `origin`
-5. 其他已配置 remote
-
-对于本地 Base，插件会验证哪个 remote 实际拥有该分支后再构造 GitHub Compare URL。
-
-## 预览与 stale result 防护
-
-生成后提供可编辑预览：
-
-- PR 标题
-- PR 正文
-- Base...Head 比较范围
-- dirty working tree 警告
-- 复制标题 / 复制正文 / 复制全部
-- 重新生成
-- 更换 Base
-- 打开 GitHub PR
-
-每一次 Copy/Open 前都会重新校验 `HEAD OID + Base OID + Base ref`。如果结果已过期，Copy/Open 会被禁用，必须重新生成。
-
-“打开 GitHub PR”不会直接提交 PR。插件只复制当前可编辑标题/正文并打开 GitHub Compare 页面，最终远端写操作始终由用户完成。
-
-## 安全模型
-
-Codex PR Safe 采用偏保守的边界：
-
-1. **只支持受信任工作区**：Restricted Mode 和虚拟工作区不支持。
-2. **只分析已提交范围**：模型输入来自已提交 `base...HEAD` 历史和 diff。
-3. **仓库控制输入也只读 HEAD**：`.codex-pr.json` 和 PR Template 从精确 HEAD Git object 读取，仓库符号链接不会被跟随。
-4. **VS Code Settings 仅允许 User/Application scope**：所有 `safeCodexPr.*` 设置均为 application scope；仓库定制只能通过已提交 `.codex-pr.json` 生效。
-5. **不隐式执行 Git 网络操作**：不会自动 `fetch` / `pull` / `push`。
-6. **Codex 只读运行**：空临时目录、read-only sandbox、禁止审批、关闭 Web Search，并关闭不需要的 execution/app/agent 能力。
-7. **CLI 能力预检**：生成前检查 `codex --help` / `codex exec --help` 是否具备插件要求的安全和结构化输出能力。
-8. **Prompt Injection 边界**：仓库派生文本全部视为不可信数据，不能覆盖安全/证据规则。
-9. **Structured Output**：封闭 JSON Schema、本地验证、Summary/Changes 不能为空，中/高风险或 Breaking Change 必须给出具体风险。
-10. **Testing 状态确定性**：模型不能输出测试执行成功状态；Testing 区域由插件本地固定标记“未验证”。
-11. **结果过期保护**：收集、生成、Copy、Open 全链路校验 snapshot。
-12. **不记录敏感持久日志**：源码 diff、Commit 内容、生成 PR 文本、原始 Codex stderr 和绝对仓库路径不会写入持久 Output Channel。
-
-组织管理的 Codex Policy 仍可能生效，插件不会绕过它。
-
-完整安全边界和发布供应链说明见 [SECURITY.md](SECURITY.md)。
-
-## 配置
-
-| 配置 | 默认值 | 说明 |
-| --- | --- | --- |
-| `safeCodexPr.codexPath` | `codex` | 本地 Codex CLI 路径，仅 User/Application 可配置 |
-| `safeCodexPr.model` | 空 | 可选模型覆盖，仅 User/Application 可配置 |
-| `safeCodexPr.language` | `zh-CN` | PR 生成语言：`zh-CN` / `en` |
-| `safeCodexPr.baseBranch` | 空 | 可选默认 Base，例如 `upstream/main` |
-| `safeCodexPr.maxDiffBytes` | `524288` | 发送给 Codex 的文本 diff 最大字节数 |
-| `safeCodexPr.maxCommitBytes` | `65536` | Commit 列表最大上下文字节数 |
-| `safeCodexPr.titleMaxLength` | `100` | PR 标题建议最大长度 |
-| `safeCodexPr.maxBodyChars` | `8000` | 本地格式化 PR 正文最大长度 |
-| `safeCodexPr.includePullRequestTemplate` | `true` | 将 HEAD 中的小型 PR Template 作为不可信参考输入 |
-| `safeCodexPr.extraInstructions` | 空 | 团队风格要求，不能覆盖安全规则 |
-| `safeCodexPr.timeoutSeconds` | `120` | Codex 生成超时时间 |
-
-所有 VS Code 设置均为 application scope，Workspace / Folder Settings 不能改变 PR policy。
-
-## 项目配置
-
-仓库可以提交 `.codex-pr.json`：
+仓库只认 `.codex-safe.json`，且必须使用 `schemaVersion: 2`。
 
 ```json
 {
-  "language": "zh-CN",
-  "baseBranch": "upstream/main",
-  "titleMaxLength": 90,
-  "maxBodyChars": 7000,
-  "includePullRequestTemplate": true,
-  "extraInstructions": "使用简洁工程语言；存在迁移影响时明确说明。"
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/d49dc356824b984166e81e42bb5f9d7abfb90099/codex-safe.schema.json",
+  "schemaVersion": 2,
+  "pr": {
+    "language": "zh-CN",
+    "baseBranch": "upstream/main",
+    "maxDiffBytes": 524288,
+    "maxCommitBytes": 65536,
+    "titleMaxLength": 100,
+    "maxBodyChars": 8000,
+    "includePullRequestTemplate": true,
+    "extraInstructions": "使用简洁工程语言；存在迁移影响时明确说明。",
+    "timeoutSeconds": 120
+  }
 }
 ```
 
-插件**只使用 HEAD 中已经提交的版本**。working tree 未提交修改不会生效；符号链接形式配置直接拒绝；未知字段直接拒绝；仓库配置不能选择 Codex executable 或 model。
+只使用 **HEAD 中已提交的策略**。PR Template 同样只从 HEAD 读取，且不会跟随符号链接。
 
-PR Template 同样只从 HEAD 读取，并跳过符号链接。
+仓库策略不能选择 Codex executable 或 model。`safeCodexPr.codexPath` 为 machine scope，其余用户偏好为 application scope。
 
-## PR 正文结构
+## Base 与 Fork 行为
 
-最终 Markdown 由插件本地生成：
+Codex PR Safe 不会联网发现分支，而是按本地证据：
+
+1. 有效的 `baseBranch`；
+2. fork 场景优先本地 `upstream/HEAD`；
+3. 本地 `origin/HEAD` / `upstream/HEAD`；
+4. `origin/main`、`upstream/main`、`main`、`master`、`develop`、`dev` 等常见本地 refs；
+5. 无高置信度 Base 时询问用户，而不是猜测。
+
+分支名中的 `/` 不等于 remote。`release/1.0` 只有在 `release` 真的是已配置 remote 时才按 remote branch 解析。
+
+GitHub Compare 使用本地 Git remote/branch 配置解析当前分支 push target；插件只验证拓扑，不替用户 push。
+
+## Review 与 Commit Provenance
+
+PR Safe 使用两个独立本地证据通道。
+
+### Review evidence
+
+Codex Review Safe 会把历史 Review Receipt v2 与真正 first-parent commit diff 重新匹配，返回 reviewed / blocked 等覆盖信息。
+
+### Commit provenance
+
+Codex Commit Safe 在生成 Commit Message 后保存 pending Commit Receipt v2。PR 查询 range evidence 时，会重新计算每个 first-parent commit 的：
+
+- parent HEAD；
+- 完整 commit diff；
+- 最终 Git commit message。
+
+只有 fingerprint 完全匹配，pending receipt 才绑定真实 `commitOid`。
+
+因此 PR Safe 可以确定性展示：
+
+- 当前 PR 中有多少 commit 仍能证明由 Codex Commit Safe 生成；
+- 这些 generated commits 中有多少同时绑定了匹配的 Codex Review Safe Receipt fingerprint。
+
+修改 Commit Message、提交内容或父提交都会自动使 provenance 失效。
+
+这些 Receipt 是 AI 工作流证据，不等于人工批准、构建证据或测试证据。
+
+## 确定性 PR 正文
+
+模型只返回结构化 narrative 字段，最终 Markdown 在本地生成，Testing 状态也由本地固定：
 
 ```text
 ## 摘要
@@ -232,39 +159,96 @@ PR Template 同样只从 HEAD 读取，并跳过符号链接。
 
 ## Review 重点
 - ...
+
+## 审查证据
+- 存在时展示确定性 Receipt 覆盖
+
+## Commit Provenance
+- 存在时展示确定性 Commit Receipt 覆盖
 ```
 
-正文末尾还会记录本地 Base...Head 比较范围。
+Base...Head compare range 单独追加。
 
-## 大型 PR
+## 预览与 stale result 防护
 
-diff 超过配置上限时**直接拒绝生成**，不会静默截断后假装已经理解整个 PR。只有确认 PR 规模合理后才应主动提高 `safeCodexPr.maxDiffBytes`。
+生成完成前以及每一次 Copy/Open 前都会验证：
 
-## Extension Identity
+```text
+HEAD OID + current branch + Base OID + Base ref
+```
 
-- Repository：`codex-pr`
-- Extension name：`codex-pr-safe`
-- Display name：**Codex PR Safe**
-- Publisher / VSIX ID：`jiying2007.codex-pr-safe`
-- Command / Settings namespace：`safeCodexPr.*`
-- Repository policy：`.codex-pr.json`
-- 配套扩展：[Codex Commit Safe](https://github.com/jiying2007/codex-commit)、[Codex Review Safe](https://github.com/jiying2007/codex-review)
-- Marketplace 状态：**尚未发布**；当前正式分发渠道为 GitHub Releases
+任一项变化都会使结果 stale，必须重新生成。
 
-## 开发与验证
+“打开 GitHub”只打开 Compare 页面并复制已经人工检查的 title/body，不会自动提交远端 PR。
+
+## GitHub Pull Requests Provider
+
+当 `GitHub.vscode-pull-request-github` 暴露 title/description provider API 时，Codex PR Safe 可以注册 provider，但不把该扩展设为硬依赖。
+
+Provider 路径与主 PR 命令使用同一个 Safe Core Codex contract 和 Semantic Context Budget。模型输入会主动省略本地 file URI metadata 与 issue content。
+
+## 使用
+
+1. Commit 本次 PR 应包含的变更。
+2. 确认本地 Base ref 足够新；需要时自行执行 `git fetch`。
+3. 打开 **Source Control**。
+4. 执行 **Codex PR Safe: 生成 PR**。
+5. 在本地预览中检查/编辑。
+6. 复制 title/body 或打开 GitHub Compare。
+7. 最终人工确认后提交 PR。
+
+## 环境要求
+
+- VS Code `1.90.0` 或更高版本
+- Git
+- 在工作区 Extension Host 所在环境安装并登录 OpenAI Codex CLI
+- 已信任、基于本地文件系统的 Git workspace
+
+## 构建与测试
 
 ```bash
-npm run verify:lock
+git submodule update --init --recursive
 npm ci --ignore-scripts --no-audit --no-fund
 npm run check
 npm run test:integration
 npm run package
 ```
 
-CI 会验证 manifest/runtime 双语目录一致性、runtime source-key coverage、Linux/Windows/macOS 最新 VS Code Extension Host、VS Code `1.90.0` 最低兼容、简体中文真实 smoke、官方 VSIX 内容和 SHA-256。
+Marketplace / Release 运行入口统一为 `dist/extension.js`。VSIX 只包含 `dist/` 下的确定性生产运行时、`dist/codex-safe.schema.json`、本地化、图标和发布文档；源码、tests、scripts、submodule metadata 一旦进入 VSIX，CI 直接失败。
 
-发布流程详见 [PUBLISHING.md](PUBLISHING.md)。
+CI 门禁包括：
+
+- static/contract/provider；
+- unit/regression；
+- Linux / Windows / macOS Extension Host；
+- 最低 VS Code `1.90.0`；
+- 简体中文本地化 smoke；
+- 官方 VSIX 边界审计与 SHA-256。
+
+## 发布完整性
+
+`main` 上版本变更触发完整 Release gate。只有 validation 与 integration 全部通过后才创建不可变 Tag 和 GitHub Release。
+
+发布资产包括：
+
+- `codex-pr-safe-<version>.vsix`
+- `SHA256SUMS`
+- 两个资产对应的 GitHub build-provenance attestation
+
+只有最终 Release job 拥有 `contents: write`、`id-token: write`、`attestations: write`；其他验证 job 只读。Actions 使用完整 commit SHA 固定。
+
+详见 [SECURITY.md](SECURITY.md) 与 [PUBLISHING.md](PUBLISHING.md)。
+
+## 产品族边界
+
+| 产品 | 职责 | 明确不做 |
+| --- | --- | --- |
+| Codex Review Safe | staged-change 质量门禁 + Review Receipt | 写代码 / commit |
+| Codex Commit Safe | Commit Message + 可验证 Commit Receipt | commit / push |
+| **Codex PR Safe** | PR narrative + 可验证 provenance | push / 自动提交 PR |
+
+设计原则：**AI 辅助 Git 工作流，但不把 Git 控制权交给 AI。**
 
 ## License
 
-见 [LICENSE](LICENSE)。
+MIT
