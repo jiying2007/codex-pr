@@ -4,9 +4,11 @@ const vscode = require('vscode');
 const { runPreparedProcess } = require('./process');
 const { buildPrompt, outputSchema, validateStructuredResult, formatPullRequest } = require('./core');
 const { createCodexCli } = require('./codex-safe-core/codex-cli');
+const { buildSemanticContext } = require('./codex-safe-core/context-builder');
 
 const GITHUB_PR_EXTENSION_ID = 'GitHub.vscode-pull-request-github';
 const PROVIDER_TITLE = 'Codex PR Safe';
+const RAW_PATCH_HARD_LIMIT_BYTES = 8 * 1024 * 1024;
 
 const providerCodexCli = createCodexCli({
   runPreparedProcess,
@@ -58,21 +60,26 @@ function normalizeProviderContext(context, options) {
     ? context.patches.map(item => typeof item?.patch === 'string' ? item.patch : '').filter(Boolean)
     : [];
   const commits = commitMessages.join('\n\n');
-  const patches = patchTexts.join('\n\n');
+  const rawPatches = patchTexts.join('\n\n');
 
-  if (!commits.trim() && !patches.trim()) return null;
+  if (!commits.trim() && !rawPatches.trim()) return null;
   const commitBytes = Buffer.byteLength(commits, 'utf8');
-  const diffBytes = Buffer.byteLength(patches, 'utf8');
+  const rawPatchBytes = Buffer.byteLength(rawPatches, 'utf8');
   if (commitBytes > options.maxCommitBytes) {
     const error = new Error(`GitHub Pull Requests commit context exceeds maxCommitBytes (${options.maxCommitBytes}).`);
     error.code = 'ECOMMITTOOLARGE';
     throw error;
   }
-  if (diffBytes > options.maxDiffBytes) {
-    const error = new Error(`GitHub Pull Requests patch context exceeds maxDiffBytes (${options.maxDiffBytes}).`);
-    error.code = 'EDIFFTOOLARGE';
+  if (rawPatchBytes > RAW_PATCH_HARD_LIMIT_BYTES) {
+    const error = new Error(`GitHub Pull Requests raw patch context exceeds the fixed safety limit (${RAW_PATCH_HARD_LIMIT_BYTES}).`);
+    error.code = 'EDIFFHARDLIMIT';
     throw error;
   }
+
+  const semantic = buildSemanticContext({
+    diff: rawPatches,
+    maxBytes: options.maxDiffBytes
+  });
 
   let templateText = '';
   if (options.includePullRequestTemplate && typeof context?.template === 'string') {
@@ -81,11 +88,15 @@ function normalizeProviderContext(context, options) {
 
   return {
     commits,
-    patches,
+    patches: semantic.text,
     templateText,
     compareBranch: typeof context?.compareBranch === 'string' ? context.compareBranch : '',
     commitCount: commitMessages.length,
-    patchCount: patchTexts.length
+    patchCount: patchTexts.length,
+    contextTruncated: semantic.truncated,
+    contextBudgetBytes: semantic.budgetBytes,
+    inputPatchBytes: semantic.inputDiffBytes,
+    truncatedSourceFiles: semantic.truncatedSourceFiles
   };
 }
 
@@ -106,14 +117,15 @@ function buildProviderInput(options, providerContext) {
     `COMPARE BRANCH: ${providerContext.compareBranch || '<unspecified>'}`,
     `COMMIT MESSAGES: ${providerContext.commitCount}`,
     `PATCHES: ${providerContext.patchCount}`,
+    `SEMANTIC CONTEXT TRUNCATED: ${providerContext.contextTruncated ? 'yes' : 'no'}`,
     '',
     '--- COMMIT MESSAGES START ---',
     providerContext.commits,
     '--- COMMIT MESSAGES END ---',
     '',
-    '--- TEXT PATCHES START ---',
+    '--- SEMANTIC PATCH CONTEXT START ---',
     providerContext.patches,
-    '--- TEXT PATCHES END ---'
+    '--- SEMANTIC PATCH CONTEXT END ---'
   ];
   if (providerContext.templateText) {
     blocks.push('', '--- PULL REQUEST TEMPLATE START ---', providerContext.templateText, '--- PULL REQUEST TEMPLATE END ---');
@@ -172,6 +184,7 @@ async function registerGitHubPullRequestProvider(context) {
 module.exports = {
   GITHUB_PR_EXTENSION_ID,
   PROVIDER_TITLE,
+  RAW_PATCH_HARD_LIMIT_BYTES,
   getProviderOptions,
   normalizeProviderContext,
   buildProviderInput,
