@@ -9,6 +9,11 @@ function ui(_zh, en, ...args) {
   return String(en).replace(/\{(\d+)\}/g, (_match, index) => String(args[Number(index)] ?? `{${index}}`));
 }
 
+const root = path.join(__dirname, '..');
+for (const forbidden of ['bootstrap.js', 'src/core.js', 'src/extension-entry.js']) {
+  assert.strictEqual(fs.existsSync(path.join(root, forbidden)), false, `${forbidden} is a forbidden transitional entry/proxy`);
+}
+
 const html = previewHtml(
   { cspSource: 'vscode-webview://test' },
   {
@@ -38,7 +43,7 @@ assert.match(html, /style-src 'nonce-[a-f0-9]+'/);
 assert.doesNotMatch(html, /unsafe-inline/);
 assert.match(html, /HEAD, current branch, or base changed/);
 
-const extension = fs.readFileSync(path.join(__dirname, '..', 'extension.js'), 'utf8');
+const extension = fs.readFileSync(path.join(root, 'extension.js'), 'utf8');
 assert.match(extension, /currentBranch/);
 assert.match(extension, /a\.headBranch === b\.headBranch/);
 assert.match(extension, /localResourceRoots:\s*\[\]/);
