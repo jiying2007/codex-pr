@@ -11,6 +11,7 @@ const {
   normalizeRef,
   formatPullRequest,
   normalizeReviewRangeEvidence,
+  normalizeCommitRangeEvidence,
   snapshotEqual,
   buildGitHubCompareUrl,
   repoLabel
@@ -35,6 +36,7 @@ const lastByRepo = new Map();
 const activeGenerations = new Map();
 let nextGenerationId = 1;
 const REVIEW_EXTENSION_ID = 'jiying2007.codex-review-safe';
+const COMMIT_EXTENSION_ID = 'jiying2007.codex-commit-safe';
 
 function formatLocalized(message, args = []) {
   return String(message).replace(/\{(\d+)\}/g, (_match, index) =>
@@ -69,6 +71,20 @@ async function getReviewEvidence(root, baseRef, headOid, token) {
   } catch (error) {
     if (error?.code === 'ECANCELLED') throw error;
     return { status: 'error', totalCommits: 0, reviewedCommits: 0, blockedCommits: 0 };
+  }
+}
+
+async function getCommitEvidence(root, baseRef, headOid, token) {
+  try {
+    const extension = vscode.extensions.getExtension(COMMIT_EXTENSION_ID);
+    if (!extension) return { status: 'unavailable', totalCommits: 0, generatedCommits: 0, reviewedGeneratedCommits: 0 };
+    const api = extension.isActive ? extension.exports : await extension.activate();
+    if (typeof api?.getCommitEvidenceForRange !== 'function') return { status: 'unsupported', totalCommits: 0, generatedCommits: 0, reviewedGeneratedCommits: 0 };
+    const result = await api.getCommitEvidenceForRange(root, baseRef, headOid, token);
+    return normalizeCommitRangeEvidence(result);
+  } catch (error) {
+    if (error?.code === 'ECANCELLED') throw error;
+    return { status: 'error', totalCommits: 0, generatedCommits: 0, reviewedGeneratedCommits: 0 };
   }
 }
 
@@ -153,7 +169,6 @@ async function selectBase(root, options, token, forcePick = false) {
   const configuredExists = options.baseBranch && detected.refs.some(r => normalizeRef(r.name) === normalizeRef(options.baseBranch));
   if (!forcePick && configuredExists) return normalizeRef(options.baseBranch);
   if (!forcePick && detected.candidate) return detected.candidate;
-
   const items = detected.refs
     .filter(r => normalizeRef(r.name) !== normalizeRef(detected.branch))
     .sort((a, b) => {
@@ -186,10 +201,7 @@ function linkCancellation(externalToken, internalSource) {
 }
 
 async function repositoryIdentity(root, baseRef, token) {
-  const [snapshot, headBranch] = await Promise.all([
-    repositorySnapshot(root, baseRef, token),
-    currentBranch(root, token)
-  ]);
+  const [snapshot, headBranch] = await Promise.all([repositorySnapshot(root, baseRef, token), currentBranch(root, token)]);
   return { ...snapshot, headBranch };
 }
 
@@ -197,7 +209,7 @@ function repositoryIdentityEqual(a, b) {
   return Boolean(a && b && a.headBranch === b.headBranch && snapshotEqual(a, b));
 }
 
-async function buildPreviewState(root, baseRef, context, structured, formatted, codexVersion, reviewEvidence, options, token) {
+async function buildPreviewState(root, baseRef, context, structured, formatted, codexVersion, reviewEvidence, commitEvidence, options, token) {
   const gh = await resolveGitHubOpenContext(root, baseRef, context.headBranch, token);
   const compareUrl = buildGitHubCompareUrl({ baseRemote: gh.baseRemote, baseBranch: gh.baseBranch, headRemote: gh.headRemote, headBranch: gh.headBranch });
   return {
@@ -216,6 +228,7 @@ async function buildPreviewState(root, baseRef, context, structured, formatted, 
     canOpenGitHub: Boolean(compareUrl && gh.published),
     codexVersion,
     reviewEvidence,
+    commitEvidence,
     stale: false
   };
 }
@@ -225,12 +238,8 @@ function validateEditedResult(title, body, limits = {}) {
   const b = String(body || '').trim();
   const titleMaxLength = Math.min(160, Math.max(1, Number(limits.titleMaxLength) || 160));
   const maxBodyChars = Math.min(20000, Math.max(1, Number(limits.maxBodyChars) || 20000));
-  if (!t || Array.from(t).length > titleMaxLength) {
-    throw new Error(ui('PR 标题为空或超过 {0} 个字符。', 'PR title is empty or exceeds {0} characters.', titleMaxLength));
-  }
-  if (b.length > maxBodyChars) {
-    throw new Error(ui('PR 正文超过 {0} 字符。', 'PR body exceeds {0} characters.', maxBodyChars));
-  }
+  if (!t || Array.from(t).length > titleMaxLength) throw new Error(ui('PR 标题为空或超过 {0} 个字符。', 'PR title is empty or exceeds {0} characters.', titleMaxLength));
+  if (b.length > maxBodyChars) throw new Error(ui('PR 正文超过 {0} 字符。', 'PR body exceeds {0} characters.', maxBodyChars));
   if (/[\0-\x08\x0B\x0C\x0E-\x1F\x7F]/.test(`${t}\n${b}`)) throw new Error(ui('PR 内容包含非法控制字符。', 'PR content contains invalid control characters.'));
   return { title: t, body: b };
 }
@@ -255,10 +264,7 @@ async function ensureFreshResult(state, token) {
 
 async function renderPreview(state) {
   if (!previewPanel) {
-    previewPanel = vscode.window.createWebviewPanel('safeCodexPr.preview', 'Codex PR Safe', vscode.ViewColumn.Beside, {
-      enableScripts: true,
-      localResourceRoots: []
-    });
+    previewPanel = vscode.window.createWebviewPanel('safeCodexPr.preview', 'Codex PR Safe', vscode.ViewColumn.Beside, { enableScripts: true, localResourceRoots: [] });
     previewPanel.onDidDispose(() => { previewMessageDisposable?.dispose(); previewMessageDisposable = undefined; previewPanel = undefined; });
   }
   previewPanel.title = `Codex PR Safe · ${repoLabel(state.root)}`;
@@ -271,16 +277,13 @@ async function renderPreview(state) {
       if (!message || !allowed.has(message.type)) return;
       const latest = lastByRepo.get(normalizeFsPath(state.root));
       if (!latest) throw new Error(ui('当前 PR 结果已失效，请重新生成。', 'The current PR result is stale. Generate it again.'));
-
       if (message.type === 'regenerate') return generate({ regenerate: true, rootOverride: state.root, baseOverride: state.baseRef });
       if (message.type === 'changeBase') return generate({ regenerate: false, rootOverride: state.root, forceBasePick: true });
-
       await ensureFreshResult(latest);
       const edited = validateEditedResult(message.title, message.body, latest);
       latest.title = edited.title;
       latest.body = edited.body;
       latest.stale = false;
-
       if (message.type === 'copyAll') return copyValue('all', edited);
       if (message.type === 'copyTitle') return copyValue('title', edited);
       if (message.type === 'copyBody') return copyValue('body', edited);
@@ -337,9 +340,12 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
         const codex = await runCodex(context, options, previousStructured, token);
         const beforeUse = await repositoryIdentity(root, baseRef, token);
         if (!repositoryIdentityEqual(before, beforeUse)) throw Object.assign(new Error(ui('Codex 生成期间 HEAD、当前分支或 Base 已变化，结果已丢弃。', 'HEAD, current branch, or base changed while Codex was generating. The result was discarded.')), { code: 'ESTALE' });
-        const reviewEvidence = await getReviewEvidence(root, baseRef, context.headOid, token);
-        const formatted = formatPullRequest(codex.result, options, { baseRef, headBranch: context.headBranch, reviewEvidence });
-        const preview = await buildPreviewState(root, baseRef, context, codex.result, formatted, codex.codexVersion, reviewEvidence, options, token);
+        const [reviewEvidence, commitEvidence] = await Promise.all([
+          getReviewEvidence(root, baseRef, context.headOid, token),
+          getCommitEvidence(root, baseRef, context.headOid, token)
+        ]);
+        const formatted = formatPullRequest(codex.result, options, { baseRef, headBranch: context.headBranch, reviewEvidence, commitEvidence });
+        const preview = await buildPreviewState(root, baseRef, context, codex.result, formatted, codex.codexVersion, reviewEvidence, commitEvidence, options, token);
         const afterPreview = await repositoryIdentity(root, baseRef, token);
         if (!repositoryIdentityEqual(before, afterPreview)) throw Object.assign(new Error(ui('生成 PR 预览期间 HEAD、当前分支或 Base 已变化，结果已丢弃。', 'HEAD, current branch, or base changed while the PR preview was being prepared. The result was discarded.')), { code: 'ESTALE' });
         return { preview, snapshot: before };
@@ -349,7 +355,7 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
     const stored = { ...generated.preview, snapshot: generated.snapshot };
     lastByRepo.set(key, stored);
     await renderPreview(stored);
-    log(`generation completed: risk=${stored.structured.riskLevel}, breaking=${stored.structured.breakingChange}`);
+    log(`generation completed: risk=${stored.structured.riskLevel}, breaking=${stored.structured.breakingChange}, provenance=${stored.commitEvidence.status}`);
   } catch (error) {
     if (error?.code !== 'ECANCELLED') showError(error);
     if (extensionMode === vscode.ExtensionMode.Test) throw error;
@@ -420,9 +426,7 @@ function activate(context) {
   reg('safeCodexPr.copyAll', args => commandWithLast('all', args));
   reg('safeCodexPr.openPullRequest', args => commandWithLast('open', args));
   reg('safeCodexPr.checkEnvironment', args => checkEnvironment(args));
-  if (extensionMode === vscode.ExtensionMode.Test) {
-    context.subscriptions.push(vscode.commands.registerCommand('safeCodexPr._testState', root => lastByRepo.get(normalizeFsPath(root)) || null));
-  }
+  if (extensionMode === vscode.ExtensionMode.Test) context.subscriptions.push(vscode.commands.registerCommand('safeCodexPr._testState', root => lastByRepo.get(normalizeFsPath(root)) || null));
   log('activated');
 }
 
@@ -433,4 +437,15 @@ function deactivate() {
   previewPanel?.dispose();
 }
 
-module.exports = { activate, deactivate, effectiveOptions, validateEditedResult, textForClipboard, normalizeFsPath, ensureFreshResult, getReviewEvidence, repositoryIdentityEqual };
+module.exports = {
+  activate,
+  deactivate,
+  effectiveOptions,
+  validateEditedResult,
+  textForClipboard,
+  normalizeFsPath,
+  ensureFreshResult,
+  getReviewEvidence,
+  getCommitEvidence,
+  repositoryIdentityEqual
+};
