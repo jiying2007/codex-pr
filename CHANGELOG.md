@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 4.0.0
+
+### Changed
+
+- Hard-switch to Safe Core 4.0.0 and consume only Review/Commit Receipt v4 provenance.
+- Lock PR Prompt Contract v1 and keep provider/base/fork behavior outside Core.
+- Add immutable VSIX releases with SPDX SBOM, SHA256, provenance attestations and no release-asset overwrite.
+
 ## 3.0.0
 
 ### Changed
