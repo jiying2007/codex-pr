@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 3.0.0
+
+### Changed
+
+- Hard-switched to Codex Safe Core 3.0.1 and Policy Schema v3.
+- Consume Review Receipt v3 and Commit Receipt v3 range provenance with no v2 fallback.
+- Preserve PR generation as a local narrative/provenance product boundary.
+
 ## 2.1.0
 
 - Pin the final Codex Safe Core 2.1 baseline with canonical repository-policy validation, closed receipt contracts, hardened process execution, Git token validation, deep-frozen policy values, and Semantic Context budgeting.

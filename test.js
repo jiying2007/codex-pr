@@ -24,13 +24,12 @@ const {
 } = require('./src/pr-domain');
 const {
   SAFE_CORE_VERSION,
-  POLICY_SCHEMA_VERSION,
   REVIEW_RECEIPT_SCHEMA_VERSION,
   COMMIT_RECEIPT_SCHEMA_VERSION,
   validateReviewReceipt,
   validateCommitReceipt
 } = require('./src/codex-safe-core/safe-contract');
-const { validatePolicySection } = require('./src/codex-safe-core/policy');
+const { POLICY_SCHEMA_VERSION, validatePolicySection } = require('./src/codex-safe-core/policy');
 const { prepareCommand } = require('./src/process');
 const { isForkTopology, readHeadBlob } = require('./src/git');
 
