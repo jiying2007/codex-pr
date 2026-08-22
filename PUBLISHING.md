@@ -1,55 +1,54 @@
 # Publishing
 
-Codex PR Safe releases are built by GitHub Actions from the committed npm lockfile and a clean immutable source commit.
+Codex PR Safe releases are immutable, reproducible GitHub Actions builds from a committed source revision, locked npm graph and commit-pinned Codex Safe Core v2 submodule.
 
-## Release gate
+## Release source requirements
 
-A release requires:
+Before release:
 
-- committed `package-lock.json` matching `package.json` name/version/devDependencies;
-- `npm run verify:lock` passing;
-- English/Simplified-Chinese manifest localization key parity;
-- runtime localization bundle parity and source-key coverage via `npm run verify:l10n`;
-- unit/regression tests passing, including Codex CLI argv/capability and Safe-boundary contracts;
-- latest VS Code Extension Host tests passing on Linux, Windows, and macOS;
-- minimum supported VS Code `1.90.0` Extension Host test passing on Ubuntu;
-- Simplified-Chinese localization smoke passing inside Extension Host;
-- official `@vscode/vsce` packaging;
-- VSIX content verification; and
-- SHA-256 generation.
-
-Validation jobs use read-only repository permissions. Only the final package/publish job receives `contents: write`.
-
-## Clean release source
-
-Release tags must point to a clean product commit. The tagged tree may contain only the permanent GitHub Actions workflows:
-
-```text
-.github/workflows/ci.yml
-.github/workflows/release.yml
+```bash
+git submodule update --init --recursive
+npm run verify:lock
+npm ci --ignore-scripts --no-audit --no-fund
+npm run check
+npm run test:integration
+npm run package
 ```
 
-Temporary bootstrap/finalizer workflows or marker files must never be present in a release tag.
+A release is valid only when:
 
-The release workflow enforces this before packaging.
+- package and lockfile metadata agree;
+- the Core path is the canonical commit-pinned Git submodule;
+- Safe Core v2 contract/policy checks pass;
+- native PR, provider, provenance and Webview hardening tests pass;
+- latest VS Code Extension Host tests pass on Linux, Windows and macOS;
+- minimum VS Code `1.90.0` passes;
+- Simplified-Chinese localization smoke passes;
+- official VSIX package-boundary verification passes;
+- SHA-256 is generated.
+
+Release source contains only permanent workflows. Bootstrap/finalizer workflows or temporary release markers are not valid release state.
 
 ## Versioning
 
-Release tags use strict semantic versioning:
+Use strict semantic versioning:
 
 ```text
 vMAJOR.MINOR.PATCH
 ```
 
-The tag version must match `package.json.version` and `package-lock.json`, and the tagged commit must be reachable from `main`.
+The tag must equal `v<package.json.version>`, lockfile version metadata must match, and the release commit must be reachable from `main`.
 
-## Create a release
+Codex Safe v2 is a breaking protocol line. Do not restore v1 repository-policy or receipt compatibility in a 2.x release.
 
-After the version change has passed CI and is merged to `main`, the `Release` workflow detects the committed version bump automatically. It runs the full gate and, only after every validation and packaging job succeeds, creates the immutable `v<package.version>` tag and GitHub Release in the same run. Ordinary `main` pushes with no version change skip the release jobs.
+## Standard release flow
 
-Use the cross-platform local release CLI as the standard entry point:
+From clean synchronized `main` with non-empty `CHANGELOG.md` Unreleased notes:
 
 ```bash
+git checkout main
+git pull --ff-only
+git submodule update --init --recursive
 npm run release:prepare -- X.Y.Z
 git diff --check
 git diff
@@ -57,52 +56,71 @@ npm run release:check
 npm run release:push
 ```
 
-`release:prepare` updates only `package.json`, `package-lock.json`, and `CHANGELOG.md`. `release:check` requires a synchronized `main`, exactly those three unstaged changes, an unused remote tag, and successful lock, test, and VSIX packaging gates. `release:push` reruns the full gate, commits and pushes only those files, then verifies that the exact pushed commit produced a successful Release workflow, matching immutable tag, published Release, VSIX, and `SHA256SUMS`. The CLI never creates or force-moves a local tag. Every command supports `--dry-run`; `release:push` also accepts `--timeout-minutes N`. `CODEX_RELEASE_GITHUB_TOKEN` is an optional local environment variable for authenticated API polling and must never be committed.
+`release:prepare` updates only `package.json`, `package-lock.json`, and `CHANGELOG.md`. `release:check` requires exactly those edits, synchronized `main`, an unused remote tag and the complete lock/test/package gate. `release:push` reruns the gate, commits/pushes the release files and verifies the exact Release workflow, immutable tag, VSIX and checksum.
 
-Pushing a matching tag remains a supported manual fallback:
+Never force-move a release tag. `CODEX_RELEASE_GITHUB_TOKEN`, when used for release polling, remains local.
 
-```bash
-git checkout main
-git pull --ff-only
-npm run verify:lock
-npm ci --ignore-scripts --no-audit --no-fund
-npm run check
+## GitHub Actions release gate
 
-# Replace X.Y.Z with package.json.version.
-git tag vX.Y.Z
-git push origin vX.Y.Z
+A committed version change on `main` triggers publication. Ordinary `main` pushes with unchanged package version do not publish. A matching `vMAJOR.MINOR.PATCH` tag remains a manual fallback.
+
+Validation jobs are read-only. Only the final release job receives:
+
+```text
+contents: write
+id-token: write
+attestations: write
 ```
 
-Do not force-move release tags. A rerun safely reuses a tag only when it resolves to the same commit, and refreshes existing Release artifacts with `--clobber`.
+Third-party actions are pinned to immutable full commit SHAs.
 
-## Package contents
+## Package boundary
 
-The release gate requires these user-facing files inside the VSIX:
+Marketplace/Release entry:
 
-- `package.nls.json`
-- `package.nls.zh-cn.json`
-- `l10n/bundle.l10n.json`
-- `l10n/bundle.l10n.zh-cn.json`
-- `README.zh-CN.md`
-- `images/icon.png`
-- `src/core.js`
-- `src/codex-safe-core/codex-cli.js`
-- `src/codex-safe-core/safe-contract.js`
-- `src/codex-safe-core/manifest.json`
+```text
+dist/extension.js
+dist/codex-safe.schema.json
+dist/src/*
+```
 
-Development-only content must not be shipped, including:
+`dist/src/` contains only the deterministic production modules staged by `npm run build`. The Core runtime subset is copied under `dist/src/codex-safe-core/` without Git/submodule metadata.
 
-- `.git/`, `.github/`, `.vscode/`;
-- tests and test runners;
-- scripts;
-- lockfiles;
-- `SECURITY.md` and `PUBLISHING.md`;
-- repository examples/config files; and
-- release bootstrap/finalizer artifacts.
+The VSIX also contains required localization, README and icon assets.
 
-## Extension identity
+It must not contain development/source material such as:
 
-The stable extension identity is:
+```text
+extension.js
+src/
+test/
+scripts/
+.gitmodules
+package-lock.json
+repository metadata
+bootstrap/finalizer artifacts
+```
+
+CI fails if those paths appear outside the production `dist/` boundary.
+
+## Artifact integrity
+
+The final job creates:
+
+- `codex-pr-safe-<version>.vsix`;
+- `SHA256SUMS`.
+
+Both are workflow/GitHub Release artifacts and receive GitHub build-provenance attestations using a full-SHA-pinned `actions/attest-build-provenance` action.
+
+Marketplace publication, when enabled, must reuse the validated VSIX rather than rebuild another binary.
+
+## Failure policy
+
+- Transient runner/network failure: rerun failed jobs.
+- Source/test/package defect: fix on `main` and publish a new version.
+- Never delete or force-move an existing release tag to hide a defective release.
+
+## Stable identity
 
 ```text
 Publisher: jiying2007
@@ -111,10 +129,4 @@ ID:        jiying2007.codex-pr-safe
 Namespace: safeCodexPr.*
 ```
 
-Do not rename the extension `name` or command/settings namespace as part of publication; doing so creates a different Marketplace identity or breaks upgrade continuity.
-
-## VS Code Marketplace
-
-Marketplace publication is intentionally separate from the GitHub Release gate until publisher authentication is finalized.
-
-When Marketplace publication is enabled, reuse the same validated VSIX rather than rebuilding an unverified package, keep publishing credentials outside the repository, and do not weaken the existing GitHub Release gate.
+Do not rename the extension or command/settings namespace during publication.
