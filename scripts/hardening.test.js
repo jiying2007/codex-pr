@@ -13,7 +13,7 @@ function ui(_zh, en, ...args) {
 }
 
 const root = path.join(__dirname, '..');
-const expectedCoreCommit = '4dc4de836625a8b70084531eb3321734eca675d0';
+const expectedCoreCommit = '270fe1e5740f837a2359e50c0d943be8e7b3926d';
 assert.strictEqual(core.SAFE_CORE_VERSION, 4);
 assert.strictEqual(core.SAFE_CONTRACT_VERSION, 2);
 assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
@@ -22,7 +22,7 @@ assert.strictEqual(core.COMMIT_RECEIPT_SCHEMA_VERSION, 4);
 assert.strictEqual(core.PR_PROMPT_CONTRACT_VERSION, 1);
 assert.strictEqual(pkg.version, '4.0.1');
 const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
-assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the final Safe Core 4.0.0 main commit');
+assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the Safe Core 4.0.1 maintenance commit');
 
 for (const forbidden of ['bootstrap.js', 'src/core.js', 'src/extension-entry.js']) {
   assert.strictEqual(fs.existsSync(path.join(root, forbidden)), false, `${forbidden} is a forbidden transitional entry/proxy`);
@@ -78,8 +78,9 @@ for (const command of ['safeCodexPr.generate', 'safeCodexPr.regenerate', 'safeCo
 const release = fs.readFileSync(path.join(root, '.github', 'workflows', 'release.yml'), 'utf8');
 assert.match(release, /SBOM\.spdx\.json/);
 assert.match(release, /Attest immutable release provenance/);
+assert.match(release, /actions\/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8/);
 assert.match(release, /immutable assets will not be overwritten/);
 assert.doesNotMatch(release, /--clobber/);
 assert.doesNotMatch(release, /tags:\s*\[/);
 
-console.log('Family v4.0.1 hardening, provenance, workspace trust, exact Safe Core pin and immutable release tests passed.');
+console.log('Family v4.0.1 hardening, provenance, workspace trust, exact Safe Core 4.0.1 maintenance pin and immutable release tests passed.');
