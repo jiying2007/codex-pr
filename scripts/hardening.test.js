@@ -13,7 +13,7 @@ function ui(_zh, en, ...args) {
 }
 
 const root = path.join(__dirname, '..');
-const expectedCoreCommit = 'cdd252468aa5c93f88a166772380e22beb9fcd44';
+const expectedCoreCommit = '21be53cf90e586880c30a7a9bd56bb7cad5fa563';
 assert.strictEqual(core.SAFE_CORE_VERSION, 4);
 assert.strictEqual(core.SAFE_CONTRACT_VERSION, 2);
 assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
