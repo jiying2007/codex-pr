@@ -2,7 +2,8 @@
 
 const { runPreparedProcess } = require('./process');
 const { buildPrompt, outputSchema, buildCodexInput, validateStructuredResult } = require('./pr-domain');
-const { isCliCompatibilityError } = require('./codex-safe-core/safe-contract');
+const { SAFE_CORE_VERSION, SAFE_CONTRACT_VERSION, PR_PROMPT_CONTRACT_VERSION, isCliCompatibilityError } = require('./codex-safe-core/safe-contract');
+const { POLICY_SCHEMA_VERSION } = require('./codex-safe-core/policy');
 const { createCodexCli } = require('./codex-safe-core/codex-cli');
 
 const capabilityCache = new Map();
@@ -31,7 +32,17 @@ async function runCodex(context, options, previousResult, token) {
     maxStdoutBytes: 4 * 1024 * 1024,
     maxStderrBytes: 1024 * 1024
   });
-  return { result: validateStructuredResult(parsed), codexVersion: resolved.version };
+  const result = validateStructuredResult(parsed);
+  const provenance = Object.freeze({
+    safeCoreVersion: SAFE_CORE_VERSION,
+    safeContractVersion: SAFE_CONTRACT_VERSION,
+    policySchemaVersion: POLICY_SCHEMA_VERSION,
+    promptContractVersion: PR_PROMPT_CONTRACT_VERSION,
+    codexVersion: resolved.version || 'unknown',
+    requestedModel: options.model || '',
+    resolvedModel: options.model || 'cli-default'
+  });
+  return { result, codexVersion: provenance.codexVersion, provenance };
 }
 
 module.exports = {

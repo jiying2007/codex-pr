@@ -161,7 +161,7 @@ function repositoryIdentityEqual(a, b) {
   return Boolean(a && b && a.headBranch === b.headBranch && snapshotEqual(a, b));
 }
 
-async function buildPreviewState(root, baseRef, context, structured, formatted, codexVersion, reviewEvidence, commitEvidence, options, token) {
+async function buildPreviewState(root, baseRef, context, structured, formatted, codexVersion, provenance, reviewEvidence, commitEvidence, options, token) {
   const gh = await resolveGitHubOpenContext(root, baseRef, context.headBranch, token);
   const compareUrl = buildGitHubCompareUrl({ baseRemote: gh.baseRemote, baseBranch: gh.baseBranch, headRemote: gh.headRemote, headBranch: gh.headBranch });
   return {
@@ -179,6 +179,7 @@ async function buildPreviewState(root, baseRef, context, structured, formatted, 
     compareUrl,
     canOpenGitHub: Boolean(compareUrl && gh.published),
     codexVersion,
+    provenance,
     reviewEvidence,
     commitEvidence,
     stale: false
@@ -297,7 +298,7 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
           getCommitEvidence(root, baseRef, context.headOid, token)
         ]);
         const formatted = formatPullRequest(codex.result, options, { baseRef, headBranch: context.headBranch, reviewEvidence, commitEvidence });
-        const preview = await buildPreviewState(root, baseRef, context, codex.result, formatted, codex.codexVersion, reviewEvidence, commitEvidence, options, token);
+        const preview = await buildPreviewState(root, baseRef, context, codex.result, formatted, codex.codexVersion, codex.provenance, reviewEvidence, commitEvidence, options, token);
         const afterPreview = await repositoryIdentity(root, baseRef, token);
         if (!repositoryIdentityEqual(before, afterPreview)) throw Object.assign(new Error(ui('生成 PR 预览期间 HEAD、当前分支或 Base 已变化，结果已丢弃。', 'HEAD, current branch, or base changed while the PR preview was being prepared. The result was discarded.')), { code: 'ESTALE' });
         return { preview, snapshot: before };
@@ -307,7 +308,7 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
     const stored = { ...generated.preview, snapshot: generated.snapshot };
     lastByRepo.set(key, stored);
     await renderPreview(stored);
-    log(`generation completed: risk=${stored.structured.riskLevel}, breaking=${stored.structured.breakingChange}, provenance=${stored.commitEvidence.status}`);
+    log(`generation completed: risk=${stored.structured.riskLevel}, breaking=${stored.structured.breakingChange}, provenance=${stored.commitEvidence.status}, promptContract=${stored.provenance?.promptContractVersion || "unknown"}`);
   } catch (error) {
     if (error?.code !== 'ECANCELLED') showError(error);
     if (extensionMode === vscode.ExtensionMode.Test) throw error;

@@ -20,7 +20,7 @@ assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
 assert.strictEqual(core.REVIEW_RECEIPT_SCHEMA_VERSION, 4);
 assert.strictEqual(core.COMMIT_RECEIPT_SCHEMA_VERSION, 4);
 assert.strictEqual(core.PR_PROMPT_CONTRACT_VERSION, 1);
-assert.strictEqual(pkg.version, '4.0.0');
+assert.strictEqual(pkg.version, '4.0.1');
 const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
 assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the final Safe Core 4.0.0 main commit');
 
@@ -56,6 +56,15 @@ assert.doesNotMatch(extension, /retainContextWhenHidden/);
 assert.match(extension, /validateEditedResult\(message\.title, message\.body, latest\)/);
 assert.match(extension, /validateEditedResult\(state\.title, state\.body, state\)/);
 assert.match(extension, /await ensureFreshResult\(latest\);\s*latest\.compareUrl/s);
+assert.match(extension, /provenance,\s*reviewEvidence/s, 'preview state must retain execution provenance');
+assert.match(extension, /codex\.provenance/, 'generation must forward Codex provenance into preview state');
+
+const codexSource = fs.readFileSync(path.join(root, 'src', 'codex.js'), 'utf8');
+for (const field of ['safeCoreVersion', 'safeContractVersion', 'policySchemaVersion', 'promptContractVersion', 'codexVersion', 'requestedModel', 'resolvedModel']) {
+  assert.match(codexSource, new RegExp(`\\b${field}\\b`), `PR provenance must include ${field}`);
+}
+assert.match(codexSource, /PR_PROMPT_CONTRACT_VERSION/);
+assert.match(codexSource, /POLICY_SCHEMA_VERSION/);
 
 assert.strictEqual(pkg.capabilities?.untrustedWorkspaces?.supported, false);
 assert.strictEqual(pkg.capabilities?.virtualWorkspaces?.supported, false);
@@ -73,4 +82,4 @@ assert.match(release, /immutable assets will not be overwritten/);
 assert.doesNotMatch(release, /--clobber/);
 assert.doesNotMatch(release, /tags:\s*\[/);
 
-console.log('Family v4 hardening, workspace trust, exact Safe Core 4.0.0 pin and immutable release tests passed.');
+console.log('Family v4.0.1 hardening, provenance, workspace trust, exact Safe Core pin and immutable release tests passed.');
