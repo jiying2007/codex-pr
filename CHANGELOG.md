@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 4.0.1
+
+### Changed
+
+- Persist PR generation provenance in preview state: Safe Core, Safe Contract, Policy Schema, Prompt Contract, Codex CLI and requested/resolved model identity.
+
 ## 4.0.0
 
 ### Changed
