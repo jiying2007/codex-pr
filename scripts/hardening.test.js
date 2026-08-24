@@ -11,7 +11,7 @@ const pkg = require('../package.json');
 function ui(_zh, en, ...args) { return String(en).replace(/\{(\d+)\}/g, (_match, index) => String(args[Number(index)] ?? `{${index}}`)); }
 
 const root = path.join(__dirname, '..');
-const expectedCoreCommit = '6c0417a376179c295433c18b1b077854d290243d';
+const expectedCoreCommit = '7ffbf6f1791e17ba74faf0922e7a702bdac72059';
 assert.strictEqual(core.SAFE_CORE_VERSION, 4);
 assert.strictEqual(core.SAFE_CONTRACT_VERSION, 2);
 assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
@@ -82,4 +82,6 @@ assert.equal(renovate.minimumReleaseAge,'3 days');
 const verification=fs.readFileSync(path.join(root,'VERIFY_RELEASE.md'),'utf8');
 assert.match(verification,/gh attestation verify codex-pr-safe-<version>\.vsix -R jiying2007\/codex-pr/);
 
-console.log('Family v4.0.1 hardening, exact Core/schema provenance, Marketplace reuse, workspace trust and immutable release tests passed.');
+require('./verify-product-docs');
+
+console.log('Family v4.0.1 hardening, exact Core/schema provenance, Marketplace reuse, workspace trust, immutable release and product documentation tests passed.');
