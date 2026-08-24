@@ -1,6 +1,6 @@
 # Publishing
 
-Codex PR Safe releases are immutable, reproducible GitHub Actions builds from a committed source revision, locked npm graph and commit-pinned Codex Safe Core v3 submodule.
+Codex PR Safe releases are immutable GitHub Actions builds from a committed source revision, locked npm graph, and one exact commit-pinned **Codex Safe Core v4** submodule.
 
 ## Release source requirements
 
@@ -18,32 +18,22 @@ npm run package
 A release is valid only when:
 
 - package and lockfile metadata agree;
-- the Core path is the canonical commit-pinned Git submodule;
-- Safe Core v3 contract/policy checks pass;
-- native PR, provider, provenance and Webview hardening tests pass;
+- `src/codex-safe-core` is a `160000` gitlink at the coordinated reviewed Core commit;
+- `.codex-safe.example.json` schema provenance points to the same Core commit;
+- Safe Core v4 / Safe Contract v2 / Policy Schema v3 / Receipt v4 / PR Prompt Contract v1 checks pass;
+- native PR/provider/provenance/Webview hardening tests pass;
 - latest VS Code Extension Host tests pass on Linux, Windows and macOS;
-- minimum VS Code `1.90.0` passes;
-- Simplified-Chinese localization smoke passes;
+- minimum VS Code `1.90.0` and localization checks pass;
 - official VSIX package-boundary verification passes;
-- SHA-256 is generated.
+- SHA256, SPDX SBOM and GitHub build provenance are generated.
 
 Release source contains only permanent workflows. Bootstrap/finalizer workflows or temporary release markers are not valid release state.
 
 ## Versioning
 
-Use strict semantic versioning:
-
-```text
-vMAJOR.MINOR.PATCH
-```
-
-The tag must equal `v<package.json.version>`, lockfile version metadata must match, and the release commit must be reachable from `main`.
-
-Codex Safe v2 is a breaking protocol line. Do not restore v1 repository-policy or receipt compatibility in a 2.x release.
+Use strict semantic versioning: `vMAJOR.MINOR.PATCH`. The tag must equal `v<package.json.version>` and remain immutable. Family v4 is the current hard-cut protocol line; do not restore legacy policy/receipt semantics, copied Core runtime, or compatibility shims.
 
 ## Standard release flow
-
-From clean synchronized `main` with non-empty `CHANGELOG.md` Unreleased notes:
 
 ```bash
 git checkout main
@@ -56,69 +46,42 @@ npm run release:check
 npm run release:push
 ```
 
-`release:prepare` updates only `package.json`, `package-lock.json`, and `CHANGELOG.md`. `release:check` requires exactly those edits, synchronized `main`, an unused remote tag and the complete lock/test/package gate. `release:push` reruns the gate, commits/pushes the release files and verifies the exact Release workflow, immutable tag, VSIX and checksum.
-
-Never force-move a release tag. `CODEX_RELEASE_GITHUB_TOKEN`, when used for release polling, remains local.
-
-## GitHub Actions release gate
-
-A committed version change on `main` triggers publication. Ordinary `main` pushes with unchanged package version do not publish. A matching `vMAJOR.MINOR.PATCH` tag remains a manual fallback.
-
-Validation jobs are read-only. Only the final release job receives:
-
-```text
-contents: write
-id-token: write
-attestations: write
-```
-
-Third-party actions are pinned to immutable full commit SHAs.
+A committed version change on `main` owns publication. Validation jobs remain read-only; only the final release job receives `contents: write`, `id-token: write`, and `attestations: write`. Third-party Actions remain immutable full-SHA pinned.
 
 ## Package boundary
 
-Marketplace/Release entry:
-
-```text
-dist/extension.js
-dist/codex-safe.schema.json
-dist/src/*
-```
-
-`dist/src/` contains only the deterministic production modules staged by `npm run build`. The Core runtime subset is copied under `dist/src/codex-safe-core/` without Git/submodule metadata.
-
-The VSIX also contains required localization, README and icon assets.
-
-It must not contain development/source material such as:
-
-```text
-extension.js
-src/
-test/
-scripts/
-.gitmodules
-package-lock.json
-repository metadata
-bootstrap/finalizer artifacts
-```
-
-CI fails if those paths appear outside the production `dist/` boundary.
+The Marketplace/Release runtime is under `dist/`, including deterministic production modules staged by `npm run build` and the selected Core runtime subset under `dist/src/codex-safe-core/`. Development source, tests, scripts, git metadata and lockfiles must not enter the VSIX. CI inspects the actual package before publication.
 
 ## Artifact integrity
 
-The final job creates:
+The GitHub Release contains:
 
 - `codex-pr-safe-<version>.vsix`;
+- `SBOM.spdx.json`;
 - `SHA256SUMS`.
 
-Both are workflow/GitHub Release artifacts and receive GitHub build-provenance attestations using a full-SHA-pinned `actions/attest-build-provenance` action.
+Verify downloaded artifacts as described in [`VERIFY_RELEASE.md`](VERIFY_RELEASE.md). Generating an attestation is not sufficient by itself; consumers and downstream distribution workflows must verify it.
 
-Marketplace publication, when enabled, must reuse the validated VSIX rather than rebuild another binary.
+## Marketplace publication
+
+GitHub Release is the **single binary source of truth**. Marketplace publication must:
+
+1. checkout the immutable release tag only for metadata/tooling;
+2. download the exact GitHub Release VSIX and `SHA256SUMS`;
+3. verify SHA256;
+4. run `gh attestation verify <vsix> -R jiying2007/codex-pr`;
+5. inspect the VSIX package boundary;
+6. publish that exact VSIX with `vsce publish --packagePath`.
+
+Marketplace workflows must never run `vsce package` or `npm run package`; a second build would create a second artifact identity.
+
+Stable `@vscode/vsce` 3.9.x still uses `VSCE_PAT`. Do not adopt prerelease/next tooling merely to remove the PAT. Hard-switch to trusted OIDC publishing only after a stable `vsce` release officially ships the required OIDC option, then remove the PAT path rather than keeping dual authentication modes.
 
 ## Failure policy
 
-- Transient runner/network failure: rerun failed jobs.
-- Source/test/package defect: fix on `main` and publish a new version.
-- Never delete or force-move an existing release tag to hide a defective release.
+- transient runner/network failure: rerun failed jobs;
+- source/test/package defect: fix on `main` and publish a new version;
+- never delete, recreate, overwrite or force-move an existing release tag/asset to hide a defective release.
 
 ## Stable identity
 
