@@ -82,4 +82,6 @@ assert.equal(renovate.minimumReleaseAge,'3 days');
 const verification=fs.readFileSync(path.join(root,'VERIFY_RELEASE.md'),'utf8');
 assert.match(verification,/gh attestation verify codex-pr-safe-<version>\.vsix -R jiying2007\/codex-pr/);
 
-console.log('Family v4.0.1 hardening, exact Core/schema provenance, Marketplace reuse, workspace trust and immutable release tests passed.');
+require('./verify-product-docs');
+
+console.log('Family v4.0.1 hardening, exact Core/schema provenance, Marketplace reuse, workspace trust, immutable release and product documentation tests passed.');
