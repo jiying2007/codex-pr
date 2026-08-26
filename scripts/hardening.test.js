@@ -11,7 +11,7 @@ const pkg = require('../package.json');
 function ui(_zh, en, ...args) { return String(en).replace(/\{(\d+)\}/g, (_match, index) => String(args[Number(index)] ?? `{${index}}`)); }
 
 const root = path.join(__dirname, '..');
-const expectedCoreCommit = 'a0c3419684f835108cad31eb909b3d7f7df7b260';
+const expectedCoreCommit = '1755262f51d5e15d74e432add38863d2383bb495';
 assert.strictEqual(core.SAFE_CORE_VERSION, 4);
 assert.strictEqual(core.SAFE_CONTRACT_VERSION, 2);
 assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
