@@ -18,7 +18,7 @@ assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
 assert.strictEqual(core.REVIEW_RECEIPT_SCHEMA_VERSION, 4);
 assert.strictEqual(core.COMMIT_RECEIPT_SCHEMA_VERSION, 4);
 assert.strictEqual(core.PR_PROMPT_CONTRACT_VERSION, 1);
-assert.strictEqual(pkg.version, '4.0.1');
+assert.strictEqual(pkg.version, '4.0.2');
 const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
 assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the coordinated Safe Core maintenance commit');
 const policyExample=JSON.parse(fs.readFileSync(path.join(root,'.codex-safe.example.json'),'utf8'));
@@ -84,4 +84,4 @@ assert.match(verification,/gh attestation verify codex-pr-safe-<version>\.vsix -
 
 require('./verify-product-docs');
 
-console.log('Family v4.0.1 hardening, exact Core/schema provenance, Marketplace reuse, workspace trust, immutable release and product documentation tests passed.');
+console.log('Family v4.0.2 hardening, exact Core/schema provenance, Marketplace reuse, workspace trust, immutable release and product documentation tests passed.');
