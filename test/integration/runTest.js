@@ -90,13 +90,16 @@ async function main() {
   const extensionTestsPath = path.resolve(__dirname, './suite/index');
   const workspace = createWorkspace();
   const fakeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-pr-safe-fake-'));
+  const userDataDir = process.platform === 'win32'
+    ? fs.mkdtempSync(path.join(os.tmpdir(), 'cpt-ui-'))
+    : fs.mkdtempSync('/tmp/cpt-ui-');
   const codexPath = createFakeCodex(fakeDir);
   try {
     await runTests({
       version: process.env.VSCODE_TEST_VERSION || 'stable',
       extensionDevelopmentPath,
       extensionTestsPath,
-      launchArgs: [workspace, '--disable-extensions'],
+      launchArgs: [workspace, `--user-data-dir=${userDataDir}`, '--disable-extensions'],
       extensionTestsEnv: {
         ...process.env,
         CODEX_PR_TEST_WORKSPACE: workspace,
@@ -106,6 +109,7 @@ async function main() {
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });
     fs.rmSync(fakeDir, { recursive: true, force: true });
+    fs.rmSync(userDataDir, { recursive: true, force: true });
   }
 }
 
