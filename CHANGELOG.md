@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 4.1.1 - 2026-08-27
+
+- Repin the exact Safe Core 4.4.1 immutable-release publication patch; PR generation, Impact Evidence and Prompt Contract semantics are unchanged.
+- Publish new VSIX/SBOM/checksum assets under repository-level immutable Releases and verify the published assets in CI.
+
 ## 4.1.0 - 2026-08-27
 
 - Adopt Safe Core 4.4 Quality Platform with user execution profiles and bounded Impact Evidence sourced from immutable HEAD blobs.

@@ -12,7 +12,7 @@ const pkg = require('../package.json');
 function ui(_zh, en, ...args) { return String(en).replace(/\{(\d+)\}/g, (_match, index) => String(args[Number(index)] ?? `{${index}}`)); }
 
 const root = path.join(__dirname, '..');
-const expectedCoreCommit = 'c59a036cdb0b5839fe0e794031d38fd274bc116b';
+const expectedCoreCommit = '0caabb91ad7f2bcedb9f3e5ac50ba4c68a315d46';
 assert.strictEqual(core.SAFE_CORE_VERSION, 4);
 assert.strictEqual(core.SAFE_CONTRACT_VERSION, 2);
 assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
@@ -24,7 +24,7 @@ assert.strictEqual(typeof core.adaptiveBudget, 'function');
 assert.strictEqual(typeof core.estimateRequestTokens, 'function');
 assert.strictEqual(typeof core.buildImpactEvidenceGraph, 'function');
 assert.strictEqual(pkg.contributes.configuration.properties['safeCodexPr.profile'].default, 'standard');
-assert.strictEqual(pkg.version, '4.1.0');
+assert.strictEqual(pkg.version, '4.1.1');
 const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
 assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the coordinated Safe Core v4.4 quality-platform commit');
 const policyExample=JSON.parse(fs.readFileSync(path.join(root,'.codex-safe.example.json'),'utf8'));
