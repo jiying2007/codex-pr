@@ -52,14 +52,20 @@ jobs:
               try: s=p.read_text()
               except UnicodeDecodeError: continue
               if old in s: p.write_text(s.replace(old,new))
+          p=Path('scripts/hardening.test.js'); s=p.read_text()
+          marker="assert.strictEqual(pkg.version, '4.1.0');"
+          if marker not in s: raise SystemExit('PR hardening version marker missing')
+          p.write_text(s.replace(marker,"assert.strictEqual(pkg.version, '4.1.1');",1))
           p=Path('CHANGELOG.md'); s=p.read_text()
           if '\n## 4.1.1 - 2026-08-27\n' not in s:
               entry='''\n## 4.1.1 - 2026-08-27\n\n- Repin the exact Safe Core 4.4.1 immutable-release publication patch; PR generation, Impact Evidence and Prompt Contract semantics are unchanged.\n- Publish new VSIX/SBOM/checksum assets under repository-level immutable Releases and verify the published assets in CI.\n'''
               s=s.replace('## Unreleased\n','## Unreleased\n'+entry,1)
               p.write_text(s)
           PY
+      - name: Install Extension Host dependencies
+        run: sudo apt-get update && (sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2)
       - name: Run full product CI
-        run: npm run ci
+        run: xvfb-run -a npm run ci
       - name: Push validated non-workflow state
         shell: bash
         run: |
