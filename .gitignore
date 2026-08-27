@@ -3,3 +3,4 @@ node_modules/
 *.vsix
 SHA256SUMS
 .DS_Store
+dist/
