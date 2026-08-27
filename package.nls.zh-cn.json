@@ -24,5 +24,11 @@
   "config.maxBodyChars": "生成 PR 正文的最大字符数。",
   "config.includePullRequestTemplate": "存在 PR 模板时，将小型模板作为不可信参考上下文提供给 Codex。",
   "config.extraInstructions": "可选团队风格要求；不能覆盖安全约束或证据规则。",
-  "config.timeoutSeconds": "Codex 生成超时时间（秒）。"
+  "config.timeoutSeconds": "Codex 生成超时时间（秒）。",
+  "config.profile": "PR 执行 Profile；在现有安全/预算上限内调整证据深度。",
+  "config.profile.quick": "快速、最小证据",
+  "config.profile.standard": "标准平衡",
+  "config.profile.deep": "深度影响分析",
+  "config.profile.security": "安全优先",
+  "config.profile.embedded": "嵌入式/并发/资源优先"
 }

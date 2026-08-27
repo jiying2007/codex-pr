@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 4.1.0 - 2026-08-27
+
+- Adopt Safe Core 4.4 Quality Platform with user execution profiles and bounded Impact Evidence sourced from immutable HEAD blobs.
+- Keep deterministic Testing/review-evidence sections and existing Safe Contract v2, Policy Schema v3 and PR Prompt Contract v1 semantics unchanged.
+
 ## 4.0.1
 
 ### Changed
