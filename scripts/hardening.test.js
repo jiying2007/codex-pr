@@ -12,7 +12,7 @@ const pkg = require('../package.json');
 function ui(_zh, en, ...args) { return String(en).replace(/\{(\d+)\}/g, (_match, index) => String(args[Number(index)] ?? `{${index}}`)); }
 
 const root = path.join(__dirname, '..');
-const expectedCoreCommit = 'a4a8acab6565bdb7e5f7927d2a4db14d31a6e895';
+const expectedCoreCommit = 'c59a036cdb0b5839fe0e794031d38fd274bc116b';
 assert.strictEqual(core.SAFE_CORE_VERSION, 4);
 assert.strictEqual(core.SAFE_CONTRACT_VERSION, 2);
 assert.strictEqual(core.POLICY_SCHEMA_VERSION, 3);
@@ -22,9 +22,11 @@ assert.strictEqual(core.PR_PROMPT_CONTRACT_VERSION, 1);
 assert.strictEqual(typeof core.scoreEvidenceRisk, 'function');
 assert.strictEqual(typeof core.adaptiveBudget, 'function');
 assert.strictEqual(typeof core.estimateRequestTokens, 'function');
-assert.strictEqual(pkg.version, '4.0.2');
+assert.strictEqual(typeof core.buildImpactEvidenceGraph, 'function');
+assert.strictEqual(pkg.contributes.configuration.properties['safeCodexPr.profile'].default, 'standard');
+assert.strictEqual(pkg.version, '4.1.0');
 const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
-assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the coordinated Safe Core v4.3 efficiency commit');
+assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the coordinated Safe Core v4.4 quality-platform commit');
 const policyExample=JSON.parse(fs.readFileSync(path.join(root,'.codex-safe.example.json'),'utf8'));
 assert.match(String(policyExample.$schema||''),new RegExp(expectedCoreCommit),'.codex-safe.example.json schema provenance must match exact Core gitlink');
 
@@ -53,7 +55,7 @@ assert.match(extension, /provenance,\s*reviewEvidence/s, 'preview state must ret
 assert.match(extension, /codex\.provenance/, 'generation must forward Codex provenance into preview state');
 
 const codexSource = fs.readFileSync(path.join(root, 'src', 'codex.js'), 'utf8');
-for (const field of ['safeCoreVersion', 'safeContractVersion', 'policySchemaVersion', 'promptContractVersion', 'codexVersion', 'requestedModel', 'resolvedModel', 'riskScore', 'contextBudgetBytes', 'requestEstimate', 'usage', 'durationMs']) assert.match(codexSource, new RegExp(`\\b${field}\\b`), `PR provenance must include ${field}`);
+for (const field of ['safeCoreVersion', 'safeContractVersion', 'policySchemaVersion', 'promptContractVersion', 'codexVersion', 'requestedModel', 'resolvedModel', 'riskScore', 'reviewProfile', 'contextBudgetBytes', 'impactNodes', 'impactBytes', 'requestEstimate', 'usage', 'durationMs']) assert.match(codexSource, new RegExp(`\\b${field}\\b`), `PR provenance must include ${field}`);
 assert.match(codexSource, /PR_PROMPT_CONTRACT_VERSION/);
 assert.match(codexSource, /POLICY_SCHEMA_VERSION/);
 assert.match(codexSource, /buildSemanticContext/);
@@ -93,4 +95,4 @@ assert.match(verification,/gh attestation verify codex-pr-safe-<version>\.vsix -
 
 require('./verify-product-docs');
 
-console.log('Family v4.3 hardening, exact Core/schema provenance, efficiency planning, Marketplace reuse, workspace trust, immutable release and product documentation tests passed.');
+console.log('Family v4.4 hardening, exact Core/schema provenance, efficiency planning, Marketplace reuse, workspace trust, immutable release and product documentation tests passed.');

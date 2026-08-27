@@ -24,5 +24,11 @@
   "config.maxBodyChars": "Maximum generated PR body length.",
   "config.includePullRequestTemplate": "Include a small repository PR template as untrusted reference context when present.",
   "config.extraInstructions": "Optional team style guidance. It cannot override safety or evidence rules.",
-  "config.timeoutSeconds": "Codex generation timeout in seconds."
+  "config.timeoutSeconds": "Codex generation timeout in seconds.",
+  "config.profile": "PR execution profile; adjusts evidence depth within existing safety and budget caps.",
+  "config.profile.quick": "Quick minimal evidence",
+  "config.profile.standard": "Balanced standard PR",
+  "config.profile.deep": "Deep impact analysis",
+  "config.profile.security": "Security-focused PR",
+  "config.profile.embedded": "Embedded/concurrency/resource-focused PR"
 }

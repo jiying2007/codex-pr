@@ -4,6 +4,7 @@ const vscode = require('vscode');
 const { git, refOid } = require('./git');
 const { clampNumber, validateExtraInstructions } = require('./pr-domain');
 const { readPolicySectionAtHead } = require('./codex-safe-core/policy');
+const { resolveReviewProfile } = require('./codex-safe-core/quality-platform');
 
 function getUserOnlySetting(config, key, fallback) {
   const inspected = config.inspect(key);
@@ -38,6 +39,8 @@ async function effectiveOptions(root, token) {
   if (!codexPath || codexPath.length > 1024 || /[\r\n\0]/.test(codexPath)) throw new Error('safeCodexPr.codexPath is invalid.');
   if (model.length > 128 || /[\r\n\0]/.test(model)) throw new Error('safeCodexPr.model is invalid.');
 
+  const profile = resolveReviewProfile(String(getUserOnlySetting(config, 'profile', 'standard') || 'standard'));
+
   const language = project.language ?? config.get('language', 'zh-CN');
   if (!['zh-CN', 'en'].includes(language)) throw new Error('safeCodexPr.language must be zh-CN or en.');
 
@@ -50,6 +53,8 @@ async function effectiveOptions(root, token) {
   return Object.freeze({
     codexPath,
     model,
+    profile: profile.name,
+    profileConfig: profile,
     language,
     baseBranch,
     maxDiffBytes: clampNumber(project.maxDiffBytes ?? config.get('maxDiffBytes', 524288), 524288, 4096, 2097152, 'maxDiffBytes'),

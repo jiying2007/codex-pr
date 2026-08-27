@@ -23,6 +23,7 @@ const {
 const { effectiveOptions } = require('./src/policy');
 const { resolveCodexExecutable, probeCodexCapabilities, runCodex } = require('./src/codex');
 const { previewHtml } = require('./src/preview');
+const { collectPrImpactEvidence } = require('./src/quality');
 
 let outputChannel;
 let extensionMode = vscode.ExtensionMode?.Production ?? 1;
@@ -286,7 +287,9 @@ async function generate({ regenerate = false, commandArgs = [], rootOverride = '
       try {
         const token = state.cancelSource.token;
         const before = await repositoryIdentity(root, baseRef, token);
-        const context = await collectPrContext(root, baseRef, options, token);
+        let context = await collectPrContext(root, baseRef, options, token);
+        const impact = await collectPrImpactEvidence(root, context.diff, options.profileConfig, token);
+        context = Object.freeze({ ...context, impact });
         const afterCollection = await repositoryIdentity(root, baseRef, token);
         if (!repositoryIdentityEqual(before, afterCollection)) throw Object.assign(new Error(ui('收集 PR 输入期间 HEAD、当前分支或 Base 已变化，请重试。', 'HEAD, current branch, or base changed while collecting PR input. Try again.')), { code: 'ESTALE' });
         const previousStructured = regenerate ? prior?.structured : undefined;
