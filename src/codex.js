@@ -20,6 +20,11 @@ const resolveCodexExecutable = sharedCodexCli.resolveCodexExecutable;
 const probeCodexCapabilities = sharedCodexCli.probeCodexCapabilities;
 const withTemporaryDirectory = sharedCodexCli.withTemporaryDirectory;
 
+function automaticTokenBudget(options = {}) {
+  const boundedInputBytes = Number(options.maxDiffBytes || 0) + Number(options.maxCommitBytes || 0) + 64 * 1024;
+  return Math.max(12000, Math.ceil(boundedInputBytes / 2) + 6000);
+}
+
 async function runCodex(context, options, previousResult, token) {
   const prompt = buildPrompt(options, context, previousResult);
   const paths = splitUnifiedDiff(context.diff).map(block => block.path);
@@ -29,7 +34,6 @@ async function runCodex(context, options, previousResult, token) {
   const plannedContext = { ...context, diff: semanticContext.text };
   const input = buildCodexInput(prompt, plannedContext, previousResult);
   const model = selectModel({ model: options.model, fastModel: options.fastModel, riskScore });
-  const automaticTokenCap = Math.max(12000, Math.ceil(Number(options.maxDiffBytes || 0) / 2) + 6000);
   const execution = await sharedCodexCli.runStructuredCodex({
     codexPath: options.codexPath,
     model,
@@ -40,7 +44,7 @@ async function runCodex(context, options, previousResult, token) {
     token,
     maxStdoutBytes: 4 * 1024 * 1024,
     maxStderrBytes: 1024 * 1024,
-    maxEstimatedTokens: Number(options.maxTokenBudget) > 0 ? Number(options.maxTokenBudget) : automaticTokenCap,
+    maxEstimatedTokens: Number(options.maxTokenBudget) > 0 ? Number(options.maxTokenBudget) : automaticTokenBudget(options),
     estimatedOutputTokens: 3000
   });
   const result = validateStructuredResult(execution.parsed);
@@ -63,6 +67,7 @@ async function runCodex(context, options, previousResult, token) {
 }
 
 module.exports = {
+  automaticTokenBudget,
   findWindowsCodexCandidates,
   resolveCodexExecutable,
   probeCodexCapabilities,
