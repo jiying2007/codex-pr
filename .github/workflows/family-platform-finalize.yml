@@ -30,6 +30,14 @@ jobs:
           git -C src/codex-safe-core checkout --quiet "$core_sha"
           git add src/codex-safe-core
           python3 scripts/finalize-family-platform.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('extension.js')
+          s=p.read_text()
+          s=s.replace('        const context = await collectPrContext(root, baseRef, options, token);','        let context = await collectPrContext(root, baseRef, options, token);',1)
+          s=s.replace('        context.impact = impact;','        context = Object.freeze({ ...context, impact });',1)
+          p.write_text(s)
+          PY
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           rm scripts/finalize-family-platform.py
       - name: Run full PR CI
