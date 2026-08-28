@@ -32,6 +32,9 @@ jobs:
           let changelog=fs.readFileSync('CHANGELOG.md','utf8');
           if(!changelog.includes(`## ${version}`)) changelog=changelog.replace('## Unreleased\n\n',`## Unreleased\n\n## ${version} - 2026-08-28\n\n- Publish the complete bilingual OpenAI-compatible relay setup and troubleshooting guide; PR runtime, Safe Contract and Core pin are unchanged.\n\n`);
           fs.writeFileSync('CHANGELOG.md',changelog);
+          let hardening=fs.readFileSync('scripts/hardening.test.js','utf8');
+          hardening=hardening.replace("assert.strictEqual(pkg.version, '4.2.0');","assert.strictEqual(pkg.version, '4.2.1');");
+          fs.writeFileSync('scripts/hardening.test.js',hardening);
           NODE
           npm ci --ignore-scripts --no-audit --no-fund
           npm run check
@@ -42,7 +45,7 @@ jobs:
           rm .github/workflows/finalize-docs-patch.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json package-lock.json CHANGELOG.md .github/workflows/finalize-docs-patch.yml
+          git add package.json package-lock.json CHANGELOG.md scripts/hardening.test.js .github/workflows/finalize-docs-patch.yml
           git diff --cached --check
           git commit -m 'chore(release): prepare v4.2.1'
           git push origin HEAD:release-v4.2.1-docs
