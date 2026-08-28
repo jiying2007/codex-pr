@@ -6,6 +6,10 @@
 
 ## Unreleased
 
+## 4.2.1 - 2026-08-28
+
+- Publish the complete bilingual OpenAI-compatible relay setup and troubleshooting guide; PR runtime, Safe Contract and Core pin are unchanged.
+
 ## 4.1.1 - 2026-08-27
 
 - Repin the exact Safe Core 4.4.1 immutable-release publication patch; PR generation, Impact Evidence and Prompt Contract semantics are unchanged.

@@ -25,7 +25,7 @@ assert.strictEqual(typeof core.estimateRequestTokens, 'function');
 assert.strictEqual(typeof core.buildImpactEvidenceGraph, 'function');
 assert.strictEqual(typeof core.normalizeCodexRuntimeOptions, 'function');
 assert.strictEqual(pkg.contributes.configuration.properties['safeCodexPr.profile'].default, 'standard');
-assert.strictEqual(pkg.version, '4.2.0');
+assert.strictEqual(pkg.version, '4.2.1');
 const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
 assert.match(stagedCore, new RegExp(`^160000 ${expectedCoreCommit} 0\\tsrc/codex-safe-core$`), 'PR Safe must pin the coordinated Safe Core v4.6 runtime-provider commit');
 const policyExample=JSON.parse(fs.readFileSync(path.join(root,'.codex-safe.example.json'),'utf8'));
