@@ -21,7 +21,7 @@ const {
   resolveGitHubOpenContext
 } = require('./src/git');
 const { effectiveOptions } = require('./src/policy');
-const { resolveCodexExecutable, probeCodexCapabilities, runCodex } = require('./src/codex');
+const { resolveCodexExecutable, probeCodexCapabilities, probeCodexRuntime, runCodex } = require('./src/codex');
 const { previewHtml } = require('./src/preview');
 const { collectPrImpactEvidence } = require('./src/quality');
 
@@ -351,16 +351,20 @@ async function checkEnvironment(commandArgs = []) {
   if (!root) return;
   const options = await effectiveOptions(root);
   const detected = await detectBase(root, options.baseBranch);
-  const resolved = await resolveCodexExecutable(options.codexPath);
-  await probeCodexCapabilities(resolved, options.model);
+  const runtime = await probeCodexRuntime({codexPath:options.codexPath,model:options.model,runtime:options.codexRuntime});
+  const endpoint = runtime.provider.endpointHost || 'Codex default';
   vscode.window.showInformationMessage(ui(
-    `Codex PR Safe 环境正常：${resolved.version}；当前分支 ${detected.branch}；Base ${detected.candidate || '需手动选择'}；CLI 能力已验证`,
-    `Codex PR Safe environment OK: ${resolved.version}; branch ${detected.branch}; base ${detected.candidate || 'manual selection required'}; CLI capabilities verified`
+    `Codex PR Safe 环境正常：${runtime.codexVersion || options.codexPath}；当前分支 ${detected.branch}；Base ${detected.candidate || '需手动选择'}；Provider ${runtime.provider.mode} (${endpoint})；真实结构化探测 ${runtime.durationMs} ms`,
+    `Codex PR Safe environment OK: ${runtime.codexVersion || options.codexPath}; branch ${detected.branch}; base ${detected.candidate || 'manual selection required'}; provider ${runtime.provider.mode} (${endpoint}); live structured probe ${runtime.durationMs} ms`
   ));
 }
 
 function showError(error) {
-  const detail = String(error?.stderr || error?.message || error || 'Unknown error').slice(0, 4000);
+  const provider = error?.provider;
+  const meta = provider ? ` Provider: ${provider.mode}${provider.endpointHost ? ` @ ${provider.endpointHost}` : ''}.` : '';
+  const timing = Number.isFinite(error?.elapsedMs) ? ` Elapsed: ${Math.round(error.elapsedMs/100)/10}s.` : '';
+  const diagnostic = error?.diagnosticTail ? ` Diagnostic: ${String(error.diagnosticTail).slice(-1200)}` : '';
+  const detail = `${String(error?.message || error?.stderr || error || 'Unknown error')}${meta}${timing}${diagnostic}`.slice(0, 4000);
   log(`error: ${error?.code || error?.name || 'ERROR'}`);
   vscode.window.showErrorMessage(ui(`Codex PR Safe 失败：${detail}`, `Codex PR Safe failed: ${detail}`), ui('查看输出', 'Show Output')).then(choice => { if (choice) outputChannel?.show(true); });
 }

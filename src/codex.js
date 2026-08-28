@@ -19,6 +19,7 @@ const sharedCodexCli = createCodexCli({
 const findWindowsCodexCandidates = sharedCodexCli.findWindowsCodexCandidates;
 const resolveCodexExecutable = sharedCodexCli.resolveCodexExecutable;
 const probeCodexCapabilities = sharedCodexCli.probeCodexCapabilities;
+const probeCodexRuntime = sharedCodexCli.probeCodexRuntime;
 const withTemporaryDirectory = sharedCodexCli.withTemporaryDirectory;
 
 function automaticTokenBudget(options = {}) {
@@ -42,7 +43,7 @@ async function runCodex(context, options, previousResult, token) {
   const execution = await sharedCodexCli.runStructuredCodex({
     codexPath: options.codexPath,
     model,
-    timeoutMs: options.timeoutSeconds * 1000,
+    runtime: options.codexRuntime,
     schema: outputSchema(),
     input,
     schemaFileName: 'pr-schema.json',
@@ -80,6 +81,7 @@ module.exports = {
   findWindowsCodexCandidates,
   resolveCodexExecutable,
   probeCodexCapabilities,
+  probeCodexRuntime,
   isCliCompatibilityError,
   withTemporaryDirectory,
   runCodex,
