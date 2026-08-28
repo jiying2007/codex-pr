@@ -30,7 +30,8 @@ async function run() {
   await cfg.update('codexPath', codexPath, vscode.ConfigurationTarget.Global);
   await cfg.update('baseBranch', 'main', vscode.ConfigurationTarget.Global);
   await cfg.update('language', 'zh-CN', vscode.ConfigurationTarget.Global);
-  await cfg.update('timeoutSeconds', 30, vscode.ConfigurationTarget.Global);
+  await cfg.update('requestTimeoutSeconds', 30, vscode.ConfigurationTarget.Global);
+  await cfg.update('operationTimeoutSeconds', 60, vscode.ConfigurationTarget.Global);
 
   const extension = vscode.extensions.getExtension('jiying2007.codex-pr-safe');
   assert.ok(extension, 'extension not found');
