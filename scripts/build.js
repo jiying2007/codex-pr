@@ -10,7 +10,7 @@ const runtimeModules = [
   'codex.js', 'quality.js', 'preview.js', 'github-pr-provider.js'
 ];
 const coreModules = [
-  'index.js', 'safe-contract.js', 'codex-cli.js', 'process-runner.js',
+  'index.js', 'safe-contract.js', 'codex-runtime.js', 'codex-cli.js', 'process-runner.js',
   'git-repository.js', 'context-builder.js', 'efficiency-planner.js', 'quality-platform.js', 'policy.js'
 ];
 const coreRuntimeData = ['core-contract.json'];

@@ -125,3 +125,7 @@ npm run ci
 ## License
 
 MIT
+
+## Codex provider runtime
+
+Codex PR Safe intentionally ignores `~/.codex/config.toml`. Configure an OpenAI-compatible relay with `safeCodexPr.providerMode`, `providerBaseUrl`, and `providerApiKeyEnv`; compatible endpoints use Responses HTTP/SSE, and Environment Check performs a real structured round-trip.

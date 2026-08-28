@@ -5,6 +5,7 @@ const { git, refOid } = require('./git');
 const { clampNumber, validateExtraInstructions } = require('./pr-domain');
 const { readPolicySectionAtHead } = require('./codex-safe-core/policy');
 const { resolveReviewProfile } = require('./codex-safe-core/quality-platform');
+const { normalizeCodexRuntimeOptions } = require('./codex-safe-core/codex-runtime');
 
 function getUserOnlySetting(config, key, fallback) {
   const inspected = config.inspect(key);
@@ -40,6 +41,31 @@ async function effectiveOptions(root, token) {
   if (model.length > 128 || /[\r\n\0]/.test(model)) throw new Error('safeCodexPr.model is invalid.');
 
   const profile = resolveReviewProfile(String(getUserOnlySetting(config, 'profile', 'standard') || 'standard'));
+  const providerMode = String(getUserOnlySetting(config, 'providerMode', 'openai') || 'openai').trim();
+  const providerBaseUrl = String(getUserOnlySetting(config, 'providerBaseUrl', '') || '').trim();
+  const providerApiKeyEnv = String(getUserOnlySetting(config, 'providerApiKeyEnv', 'OPENAI_API_KEY') || 'OPENAI_API_KEY').trim();
+  if (!['openai', 'openai-compatible'].includes(providerMode)) throw new Error('safeCodexPr.providerMode is invalid.');
+  if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(providerApiKeyEnv)) throw new Error('safeCodexPr.providerApiKeyEnv is invalid.');
+  const provider = providerMode === 'openai-compatible'
+    ? { mode: providerMode, baseUrl: providerBaseUrl, apiKeyEnv: providerApiKeyEnv }
+    : { mode: providerMode };
+  const operationSeconds = clampNumber(
+    getUserOnlySetting(config, 'operationTimeoutSeconds', 300),
+    300, 30, 1200, 'operationTimeoutSeconds'
+  );
+  const requestSeconds = clampNumber(
+    getUserOnlySetting(config, 'requestTimeoutSeconds', 180),
+    180, 10, Math.min(900, operationSeconds), 'requestTimeoutSeconds'
+  );
+  const codexRuntime = normalizeCodexRuntimeOptions({
+    provider,
+    timeouts: {
+      connectMs: clampNumber(getUserOnlySetting(config, 'connectTimeoutSeconds', 15), 15, 1, 120, 'connectTimeoutSeconds') * 1000,
+      requestMs: requestSeconds * 1000,
+      operationMs: operationSeconds * 1000,
+      idleMs: clampNumber(getUserOnlySetting(config, 'streamIdleTimeoutSeconds', 60), 60, 5, 600, 'streamIdleTimeoutSeconds') * 1000
+    }
+  });
 
   const language = project.language ?? config.get('language', 'zh-CN');
   if (!['zh-CN', 'en'].includes(language)) throw new Error('safeCodexPr.language must be zh-CN or en.');
@@ -66,7 +92,7 @@ async function effectiveOptions(root, token) {
       : Boolean(config.get('includePullRequestTemplate', true)),
     userInstructions,
     repositoryInstructions,
-    timeoutSeconds: clampNumber(project.timeoutSeconds ?? config.get('timeoutSeconds', 120), 120, 10, 300, 'timeoutSeconds'),
+    codexRuntime,
     policySource: policy.source,
     policyFingerprint: policy.fingerprint
   });
