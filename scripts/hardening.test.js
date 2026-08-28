@@ -23,7 +23,7 @@ assert.strictEqual(typeof core.scoreEvidenceRisk, 'function');
 assert.strictEqual(typeof core.adaptiveBudget, 'function');
 assert.strictEqual(typeof core.estimateRequestTokens, 'function');
 assert.strictEqual(typeof core.buildImpactEvidenceGraph, 'function');
-assert.strictEqual(typeof core.normalizeCodexRuntime, 'function');
+assert.strictEqual(typeof core.normalizeCodexRuntimeOptions, 'function');
 assert.strictEqual(pkg.contributes.configuration.properties['safeCodexPr.profile'].default, 'standard');
 assert.strictEqual(pkg.version, '4.2.0');
 const stagedCore = execFileSync('git', ['ls-files', '--stage', 'src/codex-safe-core'], { cwd: root, encoding: 'utf8' }).trim();
