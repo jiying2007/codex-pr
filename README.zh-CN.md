@@ -1,46 +1,53 @@
 # Codex Change Safe
 
-[English](README.md) | 简体中文
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-**Codex Change Safe 5.1** 是开发者侧 GitHub PR / GitLab MR **变更交付授权与 Merge Readiness 编排器**。它不重新把完整 diff 发给模型，默认新增模型调用为 **0**；它复用 Review Receipt v4 / Commit Receipt v4，并把 committed policy、Git snapshot、SCM 原生规则与实时远端状态组合成确定性授权结论。
+在 VS Code 中根据**已提交的 Git 证据、Review/Commit provenance、仓库策略与 SCM 原生合并状态**完成 GitHub Pull Request / GitLab Merge Request 的交付授权与编排；Change 阶段默认新增模型调用为 **0**。
 
-## 产品位置
+## 快速开始
 
-```text
-Codex Review Safe  → Review Receipt v4
-Codex Commit Safe  → Commit Receipt v4
-人工 commit / push
-        ↓
-Codex Change Safe
-  Policy → Preflight → Provenance → Native SCM Policy → Readiness → Authorization
-        ↓
-GitHub PR / GitLab MR
-        ↓
-CI / Human Review / Review Service / Merge Queue or Merge Train
-```
+适合在 source branch 已经完成 Commit 和 Push 后使用。Codex Change Safe 不修改源码，不执行 `git commit`、fetch、pull、rebase 或 push；它验证当前交付快照，并且只有在用户显式确认后才执行 PR/MR 远端操作。
 
-Change Safe 不复制 `codex-review-service` 的 webhook、durable queue、Finding publication、IM notification 或服务端审计职责。
+环境要求：
 
-## 5.1 关键能力
+- VS Code 1.90.0+
+- Git
+- 已信任 Git workspace
+- GitHub 使用 `GITHUB_TOKEN`，GitLab 使用 `GITLAB_TOKEN`，并通过 Extension Host 环境变量提供
+- 当仓库 Policy 要求 provenance 时，需要 Codex Review Safe / Codex Commit Safe
 
-- GitHub.com / GHES、GitLab.com / GitLab Self-Managed 14.6.1+。
-- source / target remote 分离：支持 GitHub fork，并通过 GitLab `target_project_id` 支持同实例跨项目拓扑。
-- target branch 为空时优先发现 remote HEAD / SCM default branch，不再硬编码 `main`。
-- `.codex-safe.json` committed Change Policy；本地设置**只能加严，不能减弱** committed policy。
-- 统一 Delivery Authorization Gate：Create/Update、Request Reviewers、Mark Ready、Auto-Merge、Merge Queue、Merge Train 都必须重新验证最新证据。
-- GitHub Merge Policy Snapshot：classic branch protection + active Rulesets；required checks 支持 `context + integration/app identity`，并合并原生 approvals / CODEOWNERS / merge queue 等策略。
-- GitLab provider-specific `detailed_merge_status` 状态机；未知新状态一律 `WAITING`，不再 fail-open。
-- GitLab pipeline/job、Approval Rules、External Status Checks；Premium/Ultimate 可使用 Merge Train。
-- Managed Sections marker 完整性检查；重复/残缺 marker 直接阻断更新。
-- `titlePolicy=create-only|preserve|managed`，默认不会覆盖人工修改后的现有 PR/MR 标题。
-- CODEOWNERS individual + GitHub team owner；GitLab team/group 可通过 `teamReviewerMap` 映射到用户名，未映射项明确提示而非静默丢弃。
-- SCM Token 仅来自环境变量；API host 与 Git remote host 绑定；HTTP redirect 禁止；GET transient failure 有界重试。
-- `Check Environment / Doctor` + redacted Output Channel，不记录 Token、源码、diff 或 PR/MR 正文。
-- Change Receipt v1 保留稳定 snapshot fingerprint 与 remote-bound delivery fingerprint。
+Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace Extension Host 所在环境提供 SCM Token。GitLab Self-Managed 或 GHES 只有在自动发现不足时才需要显式配置对应 API Endpoint。
 
-## Committed Change Policy
+### 第一次成功交付
 
-推荐把交付门禁提交到目标分支的 `.codex-safe.json`：
+1. 使用正常 Git/VS Code 流程 Commit 并 Push source branch。
+2. 先运行一次 **Codex Change Safe: Check Environment / Doctor**。
+3. 运行 **Codex Change Safe: Delivery Preflight**。
+4. 处理所有 Git、provenance、policy 或 provider 阻断项。
+5. 运行 **Codex Change Safe: Create / Update PR or MR**，并确认远端写操作。
+6. 启用 Native Auto-Merge、GitHub Merge Queue 或 GitLab Merge Train 前，先运行 **Refresh Merge Readiness**。
+
+详细交付流程与企业环境配置见 [工作流与授权](docs/WORKFLOW.zh-CN.md) 和 [GitLab Self-Managed](docs/GITLAB_SELF_MANAGED.zh-CN.md)。
+
+## 核心保证
+
+- Change 阶段默认模型调用为 `0`；title/body/risk/evidence 由 Git、Receipt 与 SCM state 确定性生成。
+- 所有远端 mutation 都统一经过最新 Delivery Authorization Gate，并重新验证当前交付证据。
+- `.codex-safe.json` 从 target branch committed policy 读取；本地设置只能加严，不能削弱 committed requirements。
+- GitHub/GitLab 使用各自的 provider-specific merge-state classifier；未知状态一律进入 `WAITING`，不会隐式判定为 Ready。
+- GitHub 原生策略同时覆盖 classic branch protection 与 active Rulesets；可用时保留 required-check app/integration identity。
+- GitLab readiness 覆盖 pipeline/jobs、approvals 与 External Status Checks；Merge Train 按实例能力启用。
+- source/target remote 独立，支持 GitHub fork 和同一 GitLab 实例内的跨项目 MR。
+- Managed Sections 会验证 marker 完整性；重复、残缺或异常 marker 会阻断更新，不覆盖人工正文。
+- 默认保留人工修改后的现有 PR/MR Title。
+- CODEOWNERS user 与 GitHub team 不会静默丢失；GitLab group/team 可显式映射到 reviewer username。
+- SCM Token 只来自环境变量；API host 与 Git remote host 绑定；禁止 redirect；仅只读 GET 请求进行有界重试。
+- Doctor 与运行诊断默认脱敏，不记录 Token、源码、diff 或 PR/MR 正文。
+- canonical JSON 与 fingerprint 共享能力只来自精确 commit-pinned 的 `codex-safe-core` submodule。
+
+## Repository Policy
+
+推荐把交付门禁提交到 target branch 的 `.codex-safe.json`，使用 `schemaVersion: 4`：
 
 ```json
 {
@@ -58,71 +65,66 @@ Change Safe 不复制 `codex-review-service` 的 webhook、durable queue、Findi
 }
 ```
 
-有效策略为：
+有效交付策略是 Provider 原生要求、committed repository policy 与本地 tightening settings 的并集。本地配置不能减少 required checks、approvals、provenance requirements 或 safety booleans。
+
+## Family 工作流
 
 ```text
-SCM native policy
-        ∪
-committed .codex-safe.json policy
-        ∪
-local tightening settings
+staged changes
+    ↓
+Codex Review Safe → Review Receipt v4
+    ↓
+Codex Commit Safe → Commit Receipt v4
+    ↓
+人工 git commit / push
+    ↓
+Codex Change Safe → Change Receipt v1
+    ↓
+GitHub PR / GitLab MR
+    ↓
+CI / Human Review / Codex Review Service / Merge Queue or Merge Train
 ```
 
-本地配置不能减少 committed required checks、approvals、provenance 或 safety booleans。
+Change Safe 可以在 advisory provenance 模式独立使用；仓库 Policy 也可以要求 Review 与 Commit evidence 完整后才能交付。它不复制 Codex Review Service 的 webhook、durable queue、Finding publication、notification 或服务端审计职责。
 
-## Merge Authorization
+## Provider 支持
 
-状态仍只有：`BLOCKED / WAITING / READY_TO_MERGE`。
+- GitHub.com 与 GitHub Enterprise Server（GHES）
+- GitLab.com 与 GitLab Self-Managed 14.6.1+
+- GitHub Native Auto-Merge 与 Merge Queue
+- GitLab Native Auto-Merge 与 capability-aware Merge Train
+- 自动发现 target repository default branch
+- GitHub fork 与同实例 GitLab cross-project topology
 
-- **Create / Update / Request Reviewers / Mark Ready**：要求最新 Preflight + provenance 不被阻断。
-- **Native Auto-Merge**：允许等待明确可安全延迟的 CI/approval 状态；policy unknown、provenance unknown、head/target stale、未知危险状态一律拒绝。
-- **GitHub Merge Queue / GitLab Merge Train**：只允许 `READY_TO_MERGE`。
+永久 Provider Contract Matrix 会真实验证 GitLab CE 14.6.1、17.11.7、19.3.0；VS Code Extension Host 验证覆盖 Windows、macOS、Linux 与最低 VS Code 1.90.0。
 
-GitLab `detailed_merge_status` 由 GitLab Provider 自己分类；只有明确 `mergeable` 才是 ready candidate，未来新增的未知状态默认 WAITING。
+## 安装、升级与验证
 
-## Fork / 多 Remote
+从 GitHub Release 安装 immutable VSIX。每个 Release 只构建一次，并附带 SPDX SBOM、SHA256SUMS 与 GitHub build-provenance attestation。见 [VERIFY_RELEASE.md](VERIFY_RELEASE.md) 与 [PUBLISHING.md](PUBLISHING.md)。
 
-```json
-{
-  "safeCodexChange.sourceRemote": "origin",
-  "safeCodexChange.targetRemote": "upstream",
-  "safeCodexChange.targetBranch": ""
-}
-```
+Marketplace 使用新身份 `jiying2007.codex-change-safe`；不会复用已退役的 `jiying2007.codex-pr-safe` 身份。
 
-空 target branch 自动发现目标仓库默认分支。source/target 必须位于同一 GitHub/GitLab 实例，跨 SCM host fail closed。
-
-## Token 效率
-
-Change 层默认 **0 次模型调用**。title、summary、risk、review focus、rollback 与 evidence 都由 commit metadata、path signals、Receipt 和 SCM state 确定性生成。CI 永久门禁禁止 `runCodex` / `codex exec` 重新进入 Change domain。
-
-## 验证与发布
-
-- Unit / contract / manifest / Actions pin gate。
-- Windows / macOS / Linux × Node 22.22.2 / 24.19.0。
-- 真 VS Code Extension Host：latest + VS Code 1.90.0 minimum。
-- GitLab CE provider matrix：14.6.1 / 17.11.7 / 19.3.0。
-- GitHub Release：VSIX + SPDX SBOM + SHA256SUMS + build provenance attestation。
-- Marketplace 使用新身份 `jiying2007.codex-change-safe`；旧 `codex-pr-safe` 仅保留历史/退役身份。
-
-详细文档：
-
-- [架构](docs/ARCHITECTURE.md)
-- [工作流与授权](docs/WORKFLOW.zh-CN.md)
-- [GitLab Self-Managed](docs/GITLAB_SELF_MANAGED.zh-CN.md)
-- [Token 效率](docs/TOKEN_EFFICIENCY.zh-CN.md)
-- [发布验证](VERIFY_RELEASE.md)
-- [发布说明](PUBLISHING.md)
-- [安全](SECURITY.md)
-
-## 开发验证
+## 开发
 
 ```bash
+git submodule update --init --recursive
 npm ci --ignore-scripts --no-audit --no-fund
 npm run ci
 ```
 
 `npm run package` 会构建 bundled `dist/extension.js` 并生成 `codex-change-safe-<version>.vsix`。
+
+## 支持与安全
+
+- 使用/故障排查：[SUPPORT.md](SUPPORT.md)
+- 安全/漏洞报告：[SECURITY.md](SECURITY.md)
+- 发布：[PUBLISHING.md](PUBLISHING.md)
+
+## Identity
+
+- Publisher：`jiying2007`
+- Extension ID：`jiying2007.codex-change-safe`
+- Settings：`safeCodexChange.*`
 
 ## License
 
