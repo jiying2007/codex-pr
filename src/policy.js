@@ -1,5 +1,6 @@
 'use strict';
-const POLICY_FILE = '.codex-safe.json';
+const POLICY_FILE = '.codex-change-safe.json';
+const POLICY_SCHEMA_VERSION = 1;
 const PROVENANCE = new Map([
   ['advisory', { review: false, commit: false }],
   ['require-review', { review: true, commit: false }],
@@ -20,6 +21,9 @@ function parsePolicy(text) {
   if (!String(text || '').trim()) return {};
   let doc; try { doc = JSON.parse(text); } catch { throw policyError(`${POLICY_FILE} is not valid JSON.`); }
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) throw policyError(`${POLICY_FILE} must contain a JSON object.`);
+  const unknownTop = Object.keys(doc).filter(k => !['schemaVersion', 'change'].includes(k));
+  if (unknownTop.length) throw policyError(`Unsupported ${POLICY_FILE} top-level keys: ${unknownTop.join(', ')}.`);
+  if (doc.schemaVersion !== POLICY_SCHEMA_VERSION) throw policyError(`${POLICY_FILE} schemaVersion must be ${POLICY_SCHEMA_VERSION}.`);
   if (doc.change === undefined) return {};
   if (!doc.change || typeof doc.change !== 'object' || Array.isArray(doc.change)) throw policyError(`${POLICY_FILE}.change must be an object.`);
   const c = doc.change;
@@ -30,6 +34,12 @@ function parsePolicy(text) {
   if (c.titlePolicy !== undefined && !['create-only','preserve','managed'].includes(String(c.titlePolicy))) throw policyError('Invalid change.titlePolicy.');
   const approvals = c.requiredApprovals === undefined ? undefined : Number(c.requiredApprovals);
   if (approvals !== undefined && (!Number.isInteger(approvals) || approvals < 0 || approvals > 20)) throw policyError('change.requiredApprovals must be an integer from 0 to 20.');
+  for (const key of ['blockOnReviewFindings','requireCleanWorktree','requirePushedHead','requireFreshTarget','managedSections']) {
+    if (c[key] !== undefined && typeof c[key] !== 'boolean') throw policyError(`change.${key} must be boolean.`);
+  }
+  if (c.requiredChecks !== undefined && !Array.isArray(c.requiredChecks)) throw policyError('change.requiredChecks must be an array.');
+  if (c.reviewers !== undefined && !Array.isArray(c.reviewers)) throw policyError('change.reviewers must be an array.');
+  if (c.labels !== undefined && !Array.isArray(c.labels)) throw policyError('change.labels must be an array.');
   return {
     requiredChecks: array(c.requiredChecks), requiredApprovals: approvals,
     provenancePolicy: c.provenancePolicy === undefined ? undefined : String(c.provenancePolicy),
@@ -72,4 +82,4 @@ async function resolveEffectiveConfig(git, localConfig, targetRef) {
   const committed = parsePolicy(text); if (String(text || '').trim()) committed.__present = true;
   return mergePolicy(localConfig, committed);
 }
-module.exports = { POLICY_FILE, parsePolicy, mergePolicy, resolveEffectiveConfig, provenanceValue, provenanceName };
+module.exports = { POLICY_FILE, POLICY_SCHEMA_VERSION, parsePolicy, mergePolicy, resolveEffectiveConfig, provenanceValue, provenanceName };
