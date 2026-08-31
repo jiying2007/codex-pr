@@ -2,13 +2,13 @@
 
 ## v5.1.0 → v5.1.1 hard cut
 
-Codex Safe Family now uses one committed repository policy: **`.codex-safe.json` Policy Schema v4** from Safe Core 4.10.0.
+Codex Safe Family now uses one committed repository policy: **`.codex-safe.json` Policy Schema v4** from Safe Core 4.10.1.
 
 If a repository used the temporary Change-only policy surface, merge the `change` object into `.codex-safe.json` and set `schemaVersion` to `4`. Do not keep `.codex-change-safe.json`.
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/57440a00030941020d5c3e9e01ced3c06062f42e/codex-safe.schema.json",
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/76418b80533c644e3ab01045290cd3cdd355622c/codex-safe.schema.json",
   "schemaVersion": 4,
   "review": {},
   "commit": {},
