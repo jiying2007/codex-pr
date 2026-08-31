@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "change": {
+    "provenancePolicy": "require-all",
+    "blockOnReviewFindings": true,
+    "requireCleanWorktree": true,
+    "requirePushedHead": true,
+    "requireFreshTarget": true,
+    "requiredChecks": ["build", "unit-test"],
+    "requiredApprovals": 1,
+    "titlePolicy": "create-only"
+  }
+}
