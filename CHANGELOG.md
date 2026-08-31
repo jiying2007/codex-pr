@@ -1,10 +1,19 @@
 # Changelog
 
+## 5.1.1
+
+- align English/简体中文 README navigation and top-level documentation structure with Codex Review Safe / Codex Commit Safe;
+- document the canonical Family workflow with Codex Change Safe as the delivery stage;
+- hard-cut committed Change Policy from the conflicting `.codex-safe.json.change` experiment to product-owned `.codex-change-safe.json` schema v1;
+- preserve Safe Core `.codex-safe.json` Policy Schema v3 unchanged so Review Safe, Commit Safe and Change Safe can coexist in one repository;
+- reject missing/wrong Change Policy schema, unknown top-level keys and mistyped safety fields fail-closed;
+- keep product identity, provider support, safety guarantees and release verification visible in the same family layout.
+
 ## 5.1.0
 
 - unify all remote mutations behind a fresh Delivery Authorization Gate;
 - move GitHub/GitLab merge-state semantics into provider-specific fail-closed classifiers;
-- add committed `.codex-safe.json` Change Policy with local tightening-only semantics;
+- introduce committed Change Policy with local tightening-only semantics (the 5.1.0 `.codex-safe.json.change` layout is superseded by 5.1.1);
 - union native SCM policy with committed/local required checks and approvals;
 - preserve GitHub required-check integration/app identity;
 - add source/target remote topology, GitHub fork and GitLab cross-project MR support;
