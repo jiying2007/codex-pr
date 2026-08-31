@@ -1,0 +1,31 @@
+name: Fix Core Version Gate Once
+on:
+  push:
+    branches: [repin-safe-core-v4.10.1]
+    paths: [.github/workflows/_fix-core-version-gate-once.yml]
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: repin-safe-core-v4.10.1
+      - name: Align exact Core version gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/verify-manifest.js')
+          s=p.read_text()
+          old="contract.safeCoreVersion!=='4.10.0'"
+          assert old in s
+          p.write_text(s.replace(old,"contract.safeCoreVersion!=='4.10.1'",1))
+          PY
+          git add scripts/verify-manifest.js
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'fix: bind Change manifest gate to Core 4.10.1'
+          git push origin HEAD:repin-safe-core-v4.10.1
