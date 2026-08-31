@@ -33,7 +33,8 @@ See [Workflow](docs/WORKFLOW.md) and [GitLab Self-Managed](docs/GITLAB_SELF_MANA
 
 - Change-stage model calls are `0` by default; title/body/risk/evidence are generated deterministically from Git, receipts and SCM state.
 - Every remote mutation revalidates fresh delivery evidence through the unified Delivery Authorization Gate.
-- `.codex-safe.json` is read from committed target-branch policy; local settings can tighten but never weaken committed requirements.
+- `.codex-change-safe.json` is read from committed target-branch policy; local settings can tighten but never weaken committed requirements.
+- Safe Core/Review/Commit keep their independent `.codex-safe.json` Policy Schema v3; Change Safe never overloads or reinterprets that file.
 - GitHub and GitLab merge states are provider-specific and fail closed; unknown states become `WAITING`, never implicit readiness.
 - GitHub native policy combines classic branch protection and active Rulesets, including required-check app/integration identity where available.
 - GitLab readiness includes pipeline/jobs, approvals and External Status Checks; Merge Train is capability-aware.
@@ -47,11 +48,11 @@ See [Workflow](docs/WORKFLOW.md) and [GitLab Self-Managed](docs/GITLAB_SELF_MANA
 
 ## Repository policy
 
-Commit delivery policy in the target branch's `.codex-safe.json` with `schemaVersion: 4`:
+Commit Change Safe delivery policy in the target branch's **`.codex-change-safe.json`** using `schemaVersion: 1`:
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 1,
   "change": {
     "provenancePolicy": "require-all",
     "blockOnReviewFindings": true,
@@ -65,7 +66,9 @@ Commit delivery policy in the target branch's `.codex-safe.json` with `schemaVer
 }
 ```
 
-Effective delivery policy is the union of provider-native requirements, committed repository policy and local tightening settings. Local configuration cannot remove required checks, approvals, provenance requirements or safety booleans.
+Effective delivery policy is the union of provider-native requirements, committed Change Safe policy and local tightening settings. Local configuration cannot remove required checks, approvals, provenance requirements or safety booleans.
+
+`.codex-change-safe.json` is deliberately separate from Safe Core's `.codex-safe.json` Policy Schema v3. This keeps Review Safe, Commit Safe and Change Safe simultaneously usable in one repository without schema collision. The 5.1.0 experimental `.codex-safe.json.change` form is not accepted by 5.1.1; migrate it explicitly rather than relying on a compatibility fallback.
 
 ## Family workflow
 
@@ -125,6 +128,7 @@ npm run ci
 - Publisher: `jiying2007`
 - Extension ID: `jiying2007.codex-change-safe`
 - Settings: `safeCodexChange.*`
+- Committed delivery policy: `.codex-change-safe.json` schema v1
 
 ## License
 
