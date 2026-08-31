@@ -1,0 +1,6 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');const{authorize}=require('../src/authorization');
+const prepared={preflight:{state:'READY',blockers:[]}};
+test('auto-merge permits only explicitly defer-safe waiting states',()=>{assert.equal(authorize('enableAutoMerge',prepared,{state:'WAITING',blockers:[],pending:[{code:'check_pending'}],requiredCheckSource:'provider'}).decision,'DEFER_SAFE');assert.equal(authorize('enableAutoMerge',prepared,{state:'WAITING',blockers:[],pending:[{code:'required_check_policy_unknown'}],requiredCheckSource:'unknown'}).decision,'DENY');});
+test('merge queue and merge train require fully ready state',()=>{assert.equal(authorize('enqueueMergeQueue',prepared,{state:'WAITING',blockers:[],pending:[{code:'check_pending'}],requiredCheckSource:'provider'}).decision,'DENY');assert.equal(authorize('mergeTrain',prepared,{state:'READY_TO_MERGE',blockers:[],pending:[],requiredCheckSource:'provider'}).decision,'ALLOW');});
+test('reviewer and ready transitions are authorized by fresh delivery evidence, not circular merge readiness',()=>{assert.equal(authorize('markReady',prepared,null).decision,'ALLOW');assert.equal(authorize('requestReviewers',prepared,null).decision,'ALLOW');});

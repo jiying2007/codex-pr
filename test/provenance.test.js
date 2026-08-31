@@ -7,6 +7,7 @@ test('normalizes current family range evidence without guessing receipt internal
   const commit = normalizeCommitEvidence({kind:'codex-commit-range-evidence',schemaVersion:4,totalCommits:3,generatedCommits:2,reviewedGeneratedCommits:2,matches:[{commitOid:'a',receipt:{}},{commitOid:'b',receipt:{}}]}); assert.equal(commit.generatedCommits,2);
 });
 
+
 test('provenance public API contracts fail closed when an installed extension is too old', async () => {
   const { collectProvenance } = require('../src/provenance');
   const vscode = { extensions: { getExtension(id) {
