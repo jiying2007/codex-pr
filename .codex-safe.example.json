@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/57440a00030941020d5c3e9e01ced3c06062f42e/codex-safe.schema.json",
+  "schemaVersion": 4,
+  "review": {
+    "language": "en",
+    "maxDiffBytes": 524288,
+    "maxFindings": 40,
+    "severityThreshold": "low",
+    "confidenceThreshold": 0.7,
+    "timeoutSeconds": 120
+  },
+  "commit": {
+    "language": "en",
+    "maxDiffBytes": 262144,
+    "subjectMaxLength": 72,
+    "maxBodyChars": 2000,
+    "timeoutSeconds": 90
+  },
+  "change": {
+    "provenancePolicy": "require-all",
+    "blockOnReviewFindings": true,
+    "requireCleanWorktree": true,
+    "requirePushedHead": true,
+    "requireFreshTarget": true,
+    "requiredChecks": ["build", "unit-test"],
+    "requiredApprovals": 1,
+    "titlePolicy": "create-only",
+    "managedSections": true
+  }
+}
