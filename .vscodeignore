@@ -1,5 +1,13 @@
 .github/**
+.vscode/**
+node_modules/**
+extension.js
+src/**
 test/**
 scripts/**
-*.tgz
+package-lock.json
 .gitignore
+.gitattributes
+.gitmodules
+.codex-safe.example.json
+*.tgz

@@ -1,15 +1,3 @@
-# Workflow and gates
+# Workflow and Authorization
 
-Recommended order:
-
-1. Review the staged snapshot with Codex Review Safe.
-2. Generate the commit message with Codex Commit Safe.
-3. Commit and push manually.
-4. Run **Delivery Preflight**.
-5. Resolve blockers using normal Git/SCM workflows; Change Safe does not fetch or push implicitly.
-6. Confirm **Create / Update PR or MR**.
-7. Optionally request deterministic CODEOWNERS reviewers.
-8. Refresh Merge Readiness while CI and human review progress.
-9. Use the native merge queue / auto-merge path when the gate is ready.
-
-Use `provenancePolicy=require-all` when Review and Commit receipts are mandatory; use `advisory` when Change Safe must remain standalone-capable.
+Review/Commit receipts are followed by manual commit/push. Change Safe resolves source/target topology and default target, loads committed Change Policy from the target tracking ref, performs Delivery Preflight and provenance validation, creates or updates managed PR/MR sections, and then evaluates provider-native merge policy and current readiness. Every remote mutation revalidates evidence after confirmation. Native auto-merge may defer only explicitly safe CI/approval waits; GitHub Merge Queue and GitLab Merge Train require READY_TO_MERGE.

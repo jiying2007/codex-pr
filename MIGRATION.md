@@ -1,16 +1,25 @@
-# v4 → v5 hard cut
+# Migration
 
-Codex PR Safe v4 is retired. Codex Change Safe v5 is a new product boundary in the same repository history.
+## v5.0 → v5.1 hard cut
 
-Removed rather than migrated:
+The ambiguous `safeCodexChange.remote` setting is removed. Use:
 
-- `safeCodexPr.*` settings and command IDs;
-- Codex-based full-diff PR narrative generation;
-- GitHub Compare URL / copy-and-open primary flow;
-- GitHub Pull Requests provider coupling;
-- GitHub-only fork/topology assumptions;
-- legacy preview/webview and regenerate semantics.
+```json
+{
+  "safeCodexChange.sourceRemote": "origin",
+  "safeCodexChange.targetRemote": "upstream",
+  "safeCodexChange.targetBranch": ""
+}
+```
 
-New namespace: `safeCodexChange.*`.
+An empty `targetRemote` uses `sourceRemote`; an empty `targetBranch` discovers the target repository default branch. No compatibility proxy is kept.
 
-No compatibility proxy is provided. Users of the historical extension should uninstall `jiying2007.codex-pr-safe`; a future Marketplace publication of v5 should use the new product identity `jiying2007.codex-change-safe`.
+Move security-relevant delivery requirements from per-user VS Code settings into committed target-branch `.codex-safe.json` `change` policy. Local settings remain available only as tightening overlays.
+
+Existing PR/MR human titles are preserved by default (`titlePolicy=create-only`). Set `managed` only when Change Safe should own subsequent title updates.
+
+## v4 → v5 hard cut
+
+Codex PR Safe v4 is retired. Removed rather than migrated: `safeCodexPr.*`, full-diff Codex PR narrative generation, Compare/copy-open primary flow, GitHub-only provider coupling, legacy preview/regenerate semantics and the old Marketplace identity.
+
+New product identity: `jiying2007.codex-change-safe`. The historical `jiying2007.codex-pr-safe` listing should remain deprecated/retired and point users to Change Safe.

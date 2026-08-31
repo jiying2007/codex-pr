@@ -51,6 +51,8 @@ function finalizeChangeReceipt(receipt, change, action = 'updated') {
     }
   };
   const deliveryFingerprint = fingerprintCanonical(finalReceipt);
+  // The snapshot fingerprint is intentionally stable and is the value published in the
+  // managed PR/MR body. The delivery fingerprint additionally binds the remote identity.
   return { ...finalReceipt, fingerprint: receipt.snapshotFingerprint || receipt.fingerprint, deliveryFingerprint };
 }
 

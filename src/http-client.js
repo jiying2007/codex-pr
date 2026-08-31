@@ -1,57 +1,13 @@
 'use strict';
 const { assertSafeUrl } = require('./util');
-
-function nextPage(headers, currentPage) {
-  const x = String(headers.get('x-next-page') || '').trim();
-  if (/^\d+$/.test(x) && Number(x) > currentPage) return Number(x);
-  const link = String(headers.get('link') || '');
-  for (const part of link.split(',')) {
-    if (!/;\s*rel="?next"?/i.test(part)) continue;
-    const match = part.match(/<([^>]+)>/); if (!match) continue;
-    try { const n = Number(new URL(match[1]).searchParams.get('page')); if (Number.isInteger(n) && n > currentPage) return n; } catch {}
-  }
-  return 0;
+function nextPage(headers,currentPage){const x=String(headers.get('x-next-page')||'').trim();if(/^\d+$/.test(x)&&Number(x)>currentPage)return Number(x);const link=String(headers.get('link')||'');for(const part of link.split(',')){if(!/;\s*rel="?next"?/i.test(part))continue;const m=part.match(/<([^>]+)>/);if(!m)continue;try{const n=Number(new URL(m[1]).searchParams.get('page'));if(Number.isInteger(n)&&n>currentPage)return n;}catch{}}return 0;}
+function retryAfterMs(value){if(!value)return 0;const seconds=Number(value);if(Number.isFinite(seconds))return Math.max(0,seconds*1000);const at=Date.parse(value);return Number.isFinite(at)?Math.max(0,at-Date.now()):0;}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+class HttpClient{
+ constructor({baseUrl,token,tokenHeader,tokenPrefix='',timeoutMs=30000,allowInsecureHttp=false,userAgent='codex-change-safe/5',getRetries=2}){const url=assertSafeUrl(baseUrl,allowInsecureHttp);this.baseUrl=url.toString().replace(/\/$/,'');this.token=token||'';this.tokenHeader=tokenHeader;this.tokenPrefix=tokenPrefix;this.timeoutMs=timeoutMs;this.userAgent=userAgent;this.allowInsecureHttp=allowInsecureHttp;this.getRetries=Math.max(0,Math.min(4,Number(getRetries)||0));}
+ async request(method,pathname,{query,body,expected=[200],headers={},signal}={}){const url=new URL(`${this.baseUrl}${pathname}`);if(query)for(const[key,value]of Object.entries(query)){if(value===undefined||value===null||value==='')continue;if(Array.isArray(value))value.forEach(v=>url.searchParams.append(key,String(v)));else url.searchParams.set(key,String(value));}const requestHeaders={Accept:'application/json','User-Agent':this.userAgent,...headers};if(this.token&&this.tokenHeader)requestHeaders[this.tokenHeader]=`${this.tokenPrefix}${this.token}`;if(body!==undefined)requestHeaders['Content-Type']='application/json';const attempts=method==='GET'?this.getRetries+1:1;let last;
+  for(let attempt=0;attempt<attempts;attempt++){let response;try{response=await fetch(url,{method,headers:requestHeaders,body:body===undefined?undefined:JSON.stringify(body),signal:signal||AbortSignal.timeout(this.timeoutMs),redirect:'error'});}catch(cause){last=Object.assign(new Error(`SCM ${method} ${url.origin}${url.pathname} network failure`),{code:'ESCMNETWORK',cause});if(attempt<attempts-1){await sleep(Math.min(1500,200*2**attempt));continue;}throw last;}const text=await response.text();let data=null;if(text){try{data=JSON.parse(text);}catch{data=text;}}if(expected.includes(response.status))return{data,status:response.status,headers:response.headers};const error=Object.assign(new Error(`SCM ${method} ${url.pathname} failed with ${response.status}`),{code:'ESCMHTTP',status:response.status,responseBody:typeof data==='string'?data.slice(0,2000):data});last=error;const transient=response.status===429||response.status>=500;if(method==='GET'&&transient&&attempt<attempts-1){const wait=retryAfterMs(response.headers.get('retry-after'))||Math.min(2000,250*2**attempt);await sleep(wait);continue;}throw error;}throw last;}
+ async paginate(pathname,query={},{maxPages=20,headers={},expected=[200],signal}={}){const items=[];let page=1;while(page<=maxPages){const r=await this.request('GET',pathname,{query:{...query,per_page:100,page},headers,expected,signal});if(!Array.isArray(r.data))throw Object.assign(new Error(`SCM pagination at ${pathname} did not return an array`),{code:'ESCMPAGINATION'});items.push(...r.data);const next=nextPage(r.headers,page);if(!next)return{items,complete:true};page=next;}return{items,complete:false};}
+ async paginateCollection(pathname,key,query={},{maxPages=20,headers={},expected=[200],signal}={}){const items=[];let page=1;while(page<=maxPages){const r=await this.request('GET',pathname,{query:{...query,per_page:100,page},headers,expected,signal});const pageItems=r.data?.[key];if(!Array.isArray(pageItems))throw Object.assign(new Error(`SCM pagination at ${pathname} did not return collection ${key}`),{code:'ESCMPAGINATION'});items.push(...pageItems);const next=nextPage(r.headers,page);if(!next)return{items,complete:true};page=next;}return{items,complete:false};}
 }
-class HttpClient {
-  constructor({ baseUrl, token, tokenHeader, tokenPrefix = '', timeoutMs = 30000, allowInsecureHttp = false, userAgent = 'codex-change-safe/5' }) {
-    const url = assertSafeUrl(baseUrl, allowInsecureHttp);
-    this.baseUrl = url.toString().replace(/\/$/, ''); this.token = token || ''; this.tokenHeader = tokenHeader; this.tokenPrefix = tokenPrefix; this.timeoutMs = timeoutMs; this.userAgent = userAgent; this.allowInsecureHttp = allowInsecureHttp;
-  }
-  async request(method, pathname, { query, body, expected = [200], headers = {} } = {}) {
-    const url = new URL(`${this.baseUrl}${pathname}`);
-    if (query) for (const [key, value] of Object.entries(query)) {
-      if (value === undefined || value === null || value === '') continue;
-      if (Array.isArray(value)) value.forEach(v => url.searchParams.append(key, String(v))); else url.searchParams.set(key, String(value));
-    }
-    const requestHeaders = { Accept: 'application/json', 'User-Agent': this.userAgent, ...headers };
-    if (this.token && this.tokenHeader) requestHeaders[this.tokenHeader] = `${this.tokenPrefix}${this.token}`;
-    if (body !== undefined) requestHeaders['Content-Type'] = 'application/json';
-    let response;
-    try { response = await fetch(url, { method, headers: requestHeaders, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs), redirect: 'error' }); }
-    catch (cause) { const error = new Error(`SCM ${method} ${url.origin}${url.pathname} network failure`); error.code = 'ESCMNETWORK'; error.cause = cause; throw error; }
-    const text = await response.text(); let data = null;
-    if (text) { try { data = JSON.parse(text); } catch { data = text; } }
-    if (!expected.includes(response.status)) { const error = new Error(`SCM ${method} ${url.pathname} failed with ${response.status}`); error.code = 'ESCMHTTP'; error.status = response.status; error.responseBody = typeof data === 'string' ? data.slice(0, 2000) : data; throw error; }
-    return { data, status: response.status, headers: response.headers };
-  }
-  async paginate(pathname, query = {}, { maxPages = 20, headers = {}, expected = [200] } = {}) {
-    const items = []; let page = 1;
-    while (page <= maxPages) {
-      const response = await this.request('GET', pathname, { query: { ...query, per_page: 100, page }, headers, expected });
-      if (!Array.isArray(response.data)) { const error = new Error(`SCM pagination at ${pathname} did not return an array`); error.code = 'ESCMPAGINATION'; throw error; }
-      items.push(...response.data); const next = nextPage(response.headers, page); if (!next) return { items, complete: true }; page = next;
-    }
-    return { items, complete: false };
-  }
-  async paginateCollection(pathname, key, query = {}, { maxPages = 20, headers = {}, expected = [200] } = {}) {
-    const items = []; let page = 1;
-    while (page <= maxPages) {
-      const response = await this.request('GET', pathname, { query: { ...query, per_page: 100, page }, headers, expected });
-      const pageItems = response.data?.[key];
-      if (!Array.isArray(pageItems)) { const error = new Error(`SCM pagination at ${pathname} did not return collection ${key}`); error.code = 'ESCMPAGINATION'; throw error; }
-      items.push(...pageItems); const next = nextPage(response.headers, page); if (!next) return { items, complete: true }; page = next;
-    }
-    return { items, complete: false };
-  }
-}
-module.exports = { HttpClient, nextPage };
+module.exports={HttpClient,nextPage,retryAfterMs};

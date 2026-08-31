@@ -1,12 +1,7 @@
 # Support
 
-Start with **Delivery Preflight**. Common blockers are intentionally actionable:
+Run **Codex Change Safe: Check Environment / Doctor** first. It reports only redacted operational facts: Git version, provider host, source/target repository topology, default branch, provider version/capability, token presence, Review/Commit extension API compatibility and policy source.
 
-- `target_ref_missing` / `target_ref_stale`: fetch the configured remote using normal Git, then rerun.
-- `head_not_pushed`: push the current branch, then rerun.
-- `dirty_worktree`: commit/stash or explicitly relax the policy.
-- `provider_incompatible`: upgrade the GitLab instance or use a supported environment.
-- `EAPIHOSTMISMATCH`: correct the API base URL; Change Safe will not send a token to an unrelated host.
-- `required_check_policy_unknown`: grant read access to branch protection or configure `requiredChecks` explicitly.
+The `Codex Change Safe` Output Channel logs operation id, action, duration, provider/gate codes and errors without tokens, source content, diffs or PR/MR bodies.
 
-For GitLab Self-Managed TLS, prefer a trusted company CA via `NODE_EXTRA_CA_CERTS` instead of disabling HTTPS.
+For GitLab Self-Managed, verify HTTPS/private CA setup (`NODE_EXTRA_CA_CERTS` preferred), API token scope, source/target remotes, target tracking ref freshness and the instance version. For reproducible reports include version, provider, error code and sanitized topology only.

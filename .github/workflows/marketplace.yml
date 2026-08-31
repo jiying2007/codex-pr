@@ -1,0 +1,22 @@
+name: Marketplace Publish
+on: { workflow_dispatch: {} }
+permissions: { contents: read }
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
+        with: { node-version: '22.22.2', cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run package
+      - name: Publish new Codex Change Safe identity
+        env: { VSCE_PAT: '${{ secrets.VSCE_PAT }}' }
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VSCE_PAT" || { echo 'VSCE_PAT is not configured' >&2; exit 1; }
+          npx --yes @vscode/vsce@3.9.2 publish --packagePath codex-change-safe-*.vsix -p "$VSCE_PAT"

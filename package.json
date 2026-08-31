@@ -1,8 +1,8 @@
 {
   "name": "codex-change-safe",
   "displayName": "Codex Change Safe",
-  "description": "GitHub Pull Request and GitLab Merge Request delivery orchestration with deterministic preflight, provenance and merge-readiness gates.",
-  "version": "5.0.0",
+  "description": "GitHub Pull Request and GitLab Merge Request delivery authorization with committed policy, provenance, provider-native merge gates and zero default model calls.",
+  "version": "5.1.0",
   "publisher": "jiying2007",
   "license": "MIT",
   "engines": {
@@ -34,10 +34,12 @@
     "onCommand:safeCodexChange.markReady",
     "onCommand:safeCodexChange.enableAutoMerge",
     "onCommand:safeCodexChange.enqueueMergeQueue",
+    "onCommand:safeCodexChange.enqueueMergeTrain",
+    "onCommand:safeCodexChange.doctor",
     "onCommand:safeCodexChange.open",
     "onView:safeCodexChange.delivery"
   ],
-  "main": "./extension.js",
+  "main": "./dist/extension.js",
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false
@@ -90,6 +92,17 @@
         "command": "safeCodexChange.open",
         "title": "Codex Change Safe: Open PR or MR",
         "category": "Codex Change Safe"
+      },
+      {
+        "command": "safeCodexChange.enqueueMergeTrain",
+        "title": "Codex Change Safe: Enqueue GitLab Merge Train",
+        "category": "Codex Change Safe"
+      },
+      {
+        "command": "safeCodexChange.doctor",
+        "title": "Codex Change Safe: Check Environment / Doctor",
+        "category": "Codex Change Safe",
+        "icon": "$(tools)"
       }
     ],
     "menus": {
@@ -120,6 +133,11 @@
           "command": "safeCodexChange.refresh",
           "when": "view == safeCodexChange.delivery",
           "group": "navigation@3"
+        },
+        {
+          "command": "safeCodexChange.doctor",
+          "when": "view == safeCodexChange.delivery",
+          "group": "navigation@4"
         }
       ]
     },
@@ -139,15 +157,9 @@
         },
         "safeCodexChange.targetBranch": {
           "type": "string",
-          "default": "main",
+          "default": "",
           "scope": "resource",
-          "description": "Target branch for the change request."
-        },
-        "safeCodexChange.remote": {
-          "type": "string",
-          "default": "origin",
-          "scope": "resource",
-          "description": "Git remote used for source and target synchronization checks."
+          "description": "Target branch. Empty discovers the target repository default branch."
         },
         "safeCodexChange.githubApiBaseUrl": {
           "type": "string",
@@ -265,6 +277,41 @@
           "default": true,
           "scope": "resource",
           "description": "Block delivery when matching Codex Review Safe range evidence reports blocking findings."
+        },
+        "safeCodexChange.sourceRemote": {
+          "type": "string",
+          "default": "origin",
+          "scope": "resource",
+          "description": "Git remote containing the source branch."
+        },
+        "safeCodexChange.targetRemote": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Git remote containing the target repository. Empty uses sourceRemote."
+        },
+        "safeCodexChange.titlePolicy": {
+          "type": "string",
+          "enum": [
+            "create-only",
+            "preserve",
+            "managed"
+          ],
+          "default": "create-only",
+          "scope": "resource",
+          "description": "PR/MR title ownership. create-only/preserve do not overwrite an existing human title; managed lets Change Safe update it."
+        },
+        "safeCodexChange.teamReviewerMap": {
+          "type": "object",
+          "default": {},
+          "scope": "resource",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "Optional mapping from CODEOWNERS team/group names to GitLab reviewer usernames."
         }
       }
     },
@@ -280,10 +327,14 @@
   },
   "scripts": {
     "check": "node scripts/check-syntax.js",
-    "test": "node --test test/*.test.js",
-    "ci": "npm run check && npm run verify:manifest && npm run verify:actions && npm test",
+    "test:unit": "node --test test/*.test.js",
+    "test": "npm run test:unit",
+    "ci": "npm run check && npm run verify:manifest && npm run verify:actions && npm run test:unit",
     "verify:manifest": "node scripts/verify-manifest.js",
-    "verify:actions": "node scripts/verify-actions-pins.js"
+    "verify:actions": "node scripts/verify-actions-pins.js",
+    "build": "node scripts/build.js",
+    "package": "node scripts/package.js",
+    "test:integration": "node test/integration/runTest.js"
   },
   "repository": {
     "type": "git",
