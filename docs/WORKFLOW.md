@@ -1,7 +1,21 @@
 # Workflow and Authorization
 
-Review/Commit receipts are followed by manual commit/push. Change Safe resolves source/target topology and default target, loads committed Change Policy from **`.codex-change-safe.json` schema v1** on the target tracking ref, performs Delivery Preflight and provenance validation, creates or updates managed PR/MR sections, and then evaluates provider-native merge policy and current readiness.
+Review/Commit receipts are followed by manual commit/push. Change Safe resolves source/target topology and the target default branch, loads committed `change` policy from the target tracking ref's **`.codex-safe.json` Policy Schema v4** through Safe Core 4.10.0, performs Delivery Preflight and provenance validation, creates or updates managed PR/MR sections, then evaluates provider-native merge policy and current readiness.
 
-Safe Core's `.codex-safe.json` Policy Schema v3 remains independent and is not interpreted as Change Policy. This lets Review Safe, Commit Safe and Change Safe coexist in one repository without schema collision.
+Review Safe, Commit Safe, Change Safe and Review Service share the same committed `.codex-safe.json` parser/validator and policy fingerprint while consuming separate sections. Change Safe does not define a second Repository Policy schema.
 
-Every remote mutation revalidates evidence after confirmation. Native auto-merge may defer only explicitly safe CI/approval waits; GitHub Merge Queue and GitLab Merge Train require READY_TO_MERGE. The 5.1.0 experimental `.codex-safe.json.change` layout has no compatibility fallback in 5.1.1; move its `change` object to `.codex-change-safe.json` and set `schemaVersion` to `1`.
+Effective Change policy is:
+
+```text
+validated committed .codex-safe.json.change
+              ∪
+local tightening settings
+              ∪
+SCM-native requirements
+```
+
+Local settings cannot remove committed/native requirements.
+
+Every remote mutation revalidates evidence after confirmation. Native auto-merge may defer only explicitly safe CI/approval waits; GitHub Merge Queue and GitLab Merge Train require `READY_TO_MERGE`.
+
+Policy Schema v4 is a hard cut. Schema v3 and `.codex-change-safe.json` are not read as compatibility fallbacks.
