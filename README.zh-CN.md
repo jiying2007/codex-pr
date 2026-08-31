@@ -33,26 +33,30 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 - Change 阶段默认模型调用为 `0`；title/body/risk/evidence 由 Git、Receipt 与 SCM state 确定性生成。
 - 所有远端 mutation 都统一经过最新 Delivery Authorization Gate，并重新验证当前交付证据。
-- `.codex-change-safe.json` 从 target branch committed policy 读取；本地设置只能加严，不能削弱 committed requirements。
-- Safe Core/Review/Commit 继续使用独立的 `.codex-safe.json` Policy Schema v3；Change Safe 不重载、不重新解释这个文件。
-- GitHub/GitLab 使用各自的 provider-specific merge-state classifier；未知状态一律进入 `WAITING`，不会隐式判定为 Ready。
+- 仓库策略唯一入口是 Safe Core 4.10.0 的 committed `.codex-safe.json` **Policy Schema v4**。
+- Change Safe 直接消费 Core 的 parser、闭合字段/类型校验与 Policy fingerprint，不维护第二套 Repository Policy Schema。
+- 本地 Change settings 只能加严 committed `change` rules；Provider 原生要求与之取并集，本地不能削弱。
+- GitHub/GitLab 使用各自的 provider-specific merge-state classifier；未知状态一律进入 `WAITING`。
 - GitHub 原生策略同时覆盖 classic branch protection 与 active Rulesets；可用时保留 required-check app/integration identity。
 - GitLab readiness 覆盖 pipeline/jobs、approvals 与 External Status Checks；Merge Train 按实例能力启用。
 - source/target remote 独立，支持 GitHub fork 和同一 GitLab 实例内的跨项目 MR。
-- Managed Sections 会验证 marker 完整性；重复、残缺或异常 marker 会阻断更新，不覆盖人工正文。
+- Managed Sections 验证 marker 完整性；重复、残缺或异常 marker 会阻断更新，不覆盖人工正文。
 - 默认保留人工修改后的现有 PR/MR Title。
 - CODEOWNERS user 与 GitHub team 不会静默丢失；GitLab group/team 可显式映射到 reviewer username。
 - SCM Token 只来自环境变量；API host 与 Git remote host 绑定；禁止 redirect；仅只读 GET 请求进行有界重试。
 - Doctor 与运行诊断默认脱敏，不记录 Token、源码、diff 或 PR/MR 正文。
-- canonical JSON 与 fingerprint 共享能力只来自精确 commit-pinned 的 `codex-safe-core` submodule。
+- Policy、canonical JSON 与 fingerprint 共享能力只来自精确 commit-pinned Safe Core。
 
 ## Repository Policy
 
-推荐把 Change Safe 交付门禁提交到 target branch 的 **`.codex-change-safe.json`**，使用 `schemaVersion: 1`：
+产品族统一使用 target branch 中 committed **`.codex-safe.json`**，必须使用 `schemaVersion: 4`：
 
 ```json
 {
-  "schemaVersion": 1,
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/57440a00030941020d5c3e9e01ced3c06062f42e/codex-safe.schema.json",
+  "schemaVersion": 4,
+  "review": {},
+  "commit": {},
   "change": {
     "provenancePolicy": "require-all",
     "blockOnReviewFindings": true,
@@ -61,14 +65,13 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
     "requireFreshTarget": true,
     "requiredChecks": ["build", "unit-test"],
     "requiredApprovals": 1,
-    "titlePolicy": "create-only"
+    "titlePolicy": "create-only",
+    "managedSections": true
   }
 }
 ```
 
-有效交付策略是 Provider 原生要求、committed Change Safe policy 与本地 tightening settings 的并集。本地配置不能减少 required checks、approvals、provenance requirements 或 safety booleans。
-
-`.codex-change-safe.json` 刻意与 Safe Core 的 `.codex-safe.json` Policy Schema v3 分离，因此 Review Safe、Commit Safe、Change Safe 可以在同一仓库同时使用而不会发生 schema 冲突。5.1.0 实验性的 `.codex-safe.json.change` 形式在 5.1.1 中不再接受；需要显式迁移，不提供兼容 fallback。
+Policy Schema v4 是硬切。Schema v3 和 `.codex-change-safe.json` 都不作为兼容表面。Review、Commit、Change、Review Service 统一通过 Core validator 读取各自 section，并共享同一个 committed Policy fingerprint。
 
 ## Family 工作流
 
@@ -88,7 +91,7 @@ GitHub PR / GitLab MR
 CI / Human Review / Codex Review Service / Merge Queue or Merge Train
 ```
 
-Change Safe 可以在 advisory provenance 模式独立使用；仓库 Policy 也可以要求 Review 与 Commit evidence 完整后才能交付。它不复制 Codex Review Service 的 webhook、durable queue、Finding publication、notification 或服务端审计职责。
+**Codex PR Safe 已退役**，只指旧的模型生成 PR 描述身份。Codex Change Safe 是独立的确定性交付后继产品，不恢复旧 Narrative Generator。
 
 ## Provider 支持
 
@@ -99,7 +102,7 @@ Change Safe 可以在 advisory provenance 模式独立使用；仓库 Policy 也
 - 自动发现 target repository default branch
 - GitHub fork 与同实例 GitLab cross-project topology
 
-永久 Provider Contract Matrix 会真实验证 GitLab CE 14.6.1、17.11.7、19.3.0；VS Code Extension Host 验证覆盖 Windows、macOS、Linux 与最低 VS Code 1.90.0。
+Provider Contract Matrix 真实验证 GitLab CE 14.6.1、17.11.7、19.3.0；VS Code Extension Host 验证覆盖 Windows、macOS、Linux 与最低 VS Code 1.90.0。
 
 ## 安装、升级与验证
 
@@ -115,8 +118,6 @@ npm ci --ignore-scripts --no-audit --no-fund
 npm run ci
 ```
 
-`npm run package` 会构建 bundled `dist/extension.js` 并生成 `codex-change-safe-<version>.vsix`。
-
 ## 支持与安全
 
 - 使用/故障排查：[SUPPORT.md](SUPPORT.md)
@@ -128,7 +129,8 @@ npm run ci
 - Publisher：`jiying2007`
 - Extension ID：`jiying2007.codex-change-safe`
 - Settings：`safeCodexChange.*`
-- Committed delivery policy：`.codex-change-safe.json` schema v1
+- Safe Core：`4.10.0` 精确 pin `57440a00030941020d5c3e9e01ced3c06062f42e`
+- Repository Policy：`.codex-safe.json` / Policy Schema v4
 
 ## License
 
