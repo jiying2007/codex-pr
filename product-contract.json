@@ -16,7 +16,7 @@
   "remoteWritesRequireConfirmation": true,
   "commitExtensionApiContractConsumed": 1,
   "extensionApiContract": 2,
-  "changePolicyFile": ".codex-safe.json",
+  "changePolicyFile": ".codex-change-safe.json",
   "authorizationGateVersion": 1,
   "mergePolicySnapshotVersion": 1,
   "safeCoreVersion": "4.9.6",
