@@ -9,7 +9,7 @@ Change Safe owns developer-side delivery authorization: topology discovery, comm
 ```text
 Local settings (tightening only)
          +
-Target-branch .codex-safe.json
+Target-branch .codex-change-safe.json (schema v1)
          +
 SCM-native policy
          ↓
@@ -36,7 +36,11 @@ A change has separate source and target remotes/repositories. Both must live on 
 
 ## Policy
 
-The target tracking ref is the trust root for `.codex-safe.json`. Local settings can add required checks/reviewers/labels, increase approvals or provenance requirements, and enable stricter safety booleans; they cannot weaken committed requirements.
+The target tracking ref is the trust root for Change Safe's `.codex-change-safe.json` schema v1. Local settings can add required checks/reviewers/labels, increase approvals or provenance requirements, and enable stricter safety booleans; they cannot weaken committed requirements.
+
+Safe Core independently owns `.codex-safe.json` Policy Schema v3 for Review/Commit/Review Service. Change Safe deliberately does not add a `change` section to that closed Core schema. This keeps the two trust surfaces composable in the same repository and prevents one product from invalidating another product's committed policy.
+
+There is no compatibility read of the 5.1.0 experimental `.codex-safe.json.change` form. Repositories using it must move the `change` object into `.codex-change-safe.json` with `schemaVersion: 1`.
 
 ## Evidence
 
