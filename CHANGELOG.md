@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.1.1
+
+- align English/简体中文 README navigation and top-level documentation structure with Codex Review Safe / Codex Commit Safe;
+- document the canonical Family workflow with Codex Change Safe as the delivery stage;
+- remove stale retired-product wording from the Change Safe documentation surface;
+- keep product identity, provider support, safety guarantees and release verification visible in the same family layout.
+
 ## 5.1.0
 
 - unify all remote mutations behind a fresh Delivery Authorization Gate;
