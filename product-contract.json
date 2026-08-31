@@ -1,6 +1,6 @@
 {
   "product": "Codex Change Safe",
-  "productVersion": "5.1.0",
+  "productVersion": "5.1.1",
   "extensionId": "jiying2007.codex-change-safe",
   "settingsNamespace": "safeCodexChange",
   "changeReceiptSchema": 1,
