@@ -6,7 +6,9 @@ Codex Change Safe runs only in trusted local-file workspaces. Git evidence uses 
 
 ## Policy trust
 
-Delivery policy is loaded from committed `.codex-safe.json` on the target tracking ref. Local settings may tighten requirements but cannot reduce committed required checks, approvals, provenance or safety booleans. Unknown committed Change Policy keys fail closed.
+Delivery policy is loaded from committed `.codex-change-safe.json` schema v1 on the target tracking ref. Local settings may tighten requirements but cannot reduce committed required checks, approvals, provenance or safety booleans. Unknown top-level/change keys, wrong schema versions and mistyped safety fields fail closed.
+
+Safe Core's `.codex-safe.json` Policy Schema v3 is a separate trust surface for Review/Commit/Review Service and is never interpreted as Change Policy.
 
 ## SCM credentials
 
