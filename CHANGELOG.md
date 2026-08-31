@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.1.2
+
+- repin the exact immutable Safe Core 4.10.1 release that fixes active Change Product Contract verification;
+- keep Safe Contract v2, Policy Schema v4, Change Receipt v1 and zero default model calls unchanged.
+
 ## 5.1.1
 
 - align English/简体中文 README navigation and top-level documentation structure with Codex Review Safe / Codex Commit Safe;
