@@ -1,6 +1,6 @@
 {
   "product": "Codex Change Safe",
-  "productVersion": "5.0.0",
+  "productVersion": "5.1.0",
   "extensionId": "jiying2007.codex-change-safe",
   "settingsNamespace": "safeCodexChange",
   "changeReceiptSchema": 1,
@@ -14,5 +14,17 @@
   ],
   "defaultModelCalls": 0,
   "remoteWritesRequireConfirmation": true,
-  "commitExtensionApiContractConsumed": 1
+  "commitExtensionApiContractConsumed": 1,
+  "extensionApiContract": 2,
+  "changePolicyFile": ".codex-safe.json",
+  "authorizationGateVersion": 1,
+  "mergePolicySnapshotVersion": 1,
+  "safeCoreVersion": "4.9.6",
+  "safeCoreCommit": "43e818dc9ae91051f55374a9f9a47b9df6420cd6",
+  "minimumNodeVersion": "22.22.2",
+  "canonicalNodeVersion": "24.19.0",
+  "supportedNodeMajors": [
+    22,
+    24
+  ]
 }

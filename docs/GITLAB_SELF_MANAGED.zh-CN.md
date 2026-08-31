@@ -1,30 +1,11 @@
 # GitLab Self-Managed
 
-Change Safe 将 GitLab Self-Managed 作为一等 Provider，不依赖 github.com。
+支持 GitLab 14.6.1+，并在真实 GitLab CE 14.6.1 / 17.11.7 / 19.3.0 CI 矩阵运行 Provider contract。
 
-最低兼容版本：**14.6.1**。实例版本通过 `/api/v4/version` 真实探测；低于下限或无法安全解析版本时 Preflight 阻断。
-
-## 内网配置
-
-```json
-{
-  "safeCodexChange.provider": "gitlab",
-  "safeCodexChange.remote": "origin",
-  "safeCodexChange.targetBranch": "main",
-  "safeCodexChange.gitlabApiBaseUrl": "https://gitlab.company.local/api/v4"
-}
-```
-
-```bash
-export GITLAB_TOKEN='...'
-export NODE_EXTRA_CA_CERTS=/etc/company-ca.pem
-```
-
-API host 必须与 Git remote host 相同。不要使用公网 relay 转发 GitLab Token。
-
-## 版本能力
-
-- Draft：统一使用 `Draft:` 标题前缀，覆盖旧 GitLab。
-- Auto-Merge：GitLab 17.11+ 使用 `auto_merge=true`；旧 profile 使用 `merge_when_pipeline_succeeds=true`。
-- CI：优先读取当前 MR head pipeline 的 jobs；无权限读取 jobs 时回退 pipeline 状态。
-- Approval Rules：接口可用时读取 `/approval_state`；CE/权限不足时回退普通 approvals + 配置门槛。
+- 17.11+ auto-merge 使用 `auto_merge`；更早版本使用 `merge_when_pipeline_succeeds`。
+- `detailed_merge_status` 使用 Provider 专属 fail-closed 状态机；`conflict` 等阻断状态不会误判为 READY，未知未来状态默认为 WAITING。
+- Pipeline job 区分 blocking manual 与 `allow_failure` optional manual。
+- Ultimate External Status Checks 可进入 Merge Readiness；不可用时 capability-aware 回退，不伪造支持。
+- Premium/Ultimate 可使用 Merge Train，调用绑定当前 head SHA。
+- Fork/跨项目 MR 使用 source / target remote 拓扑与 `target_project_id`。
+- 私有 CA 推荐 `NODE_EXTRA_CA_CERTS`；HTTP 默认拒绝。所有 SCM HTTP redirect 均禁用。

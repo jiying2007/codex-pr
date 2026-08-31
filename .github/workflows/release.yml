@@ -1,0 +1,106 @@
+name: Release v5
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions: { contents: read }
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
+        with: { node-version: '22.22.2', cache: npm }
+      - id: version
+        shell: bash
+        env: { BEFORE: '${{ github.event.before }}' }
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version"); tag="v${version}"; publish=true
+          if [[ "$BEFORE" =~ ^[0-9a-f]{40}$ && ! "$BEFORE" =~ ^0+$ ]]; then
+            previous=$(git show "${BEFORE}:package.json" 2>/dev/null | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>{try{process.stdout.write(JSON.parse(s).version||'')}catch{}})" || true)
+            if [ "$previous" = "$version" ] && git ls-remote --exit-code --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then publish=false; fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"; echo "tag=$tag" >> "$GITHUB_OUTPUT"; echo "publish=$publish" >> "$GITHUB_OUTPUT"
+      - if: steps.version.outputs.publish == 'true'
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run ci
+  extension-host:
+    needs: validate
+    if: needs.validate.outputs.publish == 'true'
+    strategy: { fail-fast: false, matrix: { os: [ubuntu-latest, windows-latest, macos-latest] } }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
+        with: { node-version: '22.22.2', cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm install --no-save --package-lock=false --ignore-scripts @vscode/test-electron@3.1.0
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && (sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2)
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
+      - if: runner.os != 'Linux'
+        run: npm run test:integration
+  release:
+    needs: [validate, extension-host]
+    if: needs.validate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions: { contents: write, id-token: write, attestations: write }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
+        with: { node-version: '22.22.2', cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run package
+      - name: Verify VSIX and generate evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='${{ needs.validate.outputs.version }}'; vsix="codex-change-safe-${version}.vsix"
+          unzip -Z1 "$vsix" > /tmp/vsix.txt
+          grep -Fx 'extension/dist/extension.js' /tmp/vsix.txt
+          if grep -E '^extension/(extension\.js|src/|test/|scripts/|package-lock\.json)' /tmp/vsix.txt; then echo 'development files leaked into VSIX' >&2; exit 1; fi
+          npm sbom --sbom-format spdx > SBOM.spdx.json
+          sha256sum "$vsix" SBOM.spdx.json > SHA256SUMS
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-path: |
+            codex-change-safe-${{ needs.validate.outputs.version }}.vsix
+            SBOM.spdx.json
+            SHA256SUMS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: codex-change-safe-${{ needs.validate.outputs.version }}
+          path: |
+            codex-change-safe-${{ needs.validate.outputs.version }}.vsix
+            SBOM.spdx.json
+            SHA256SUMS
+      - name: Tag and publish immutable GitHub Release
+        env: { GH_TOKEN: '${{ github.token }}', TAG: '${{ needs.validate.outputs.tag }}' }
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --refs origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"; test "$(git rev-list -n1 "$TAG")" = "$GITHUB_SHA"
+          else gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${TAG}" -f sha="$GITHUB_SHA" >/dev/null; fi
+          gh release view "$TAG" >/dev/null 2>&1 && { echo "release already exists" >&2; exit 1; } || true
+          gh release create "$TAG" codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS --title "Codex Change Safe ${{ needs.validate.outputs.version }}" --generate-notes --verify-tag

@@ -1,0 +1,46 @@
+name: Extension Host
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  extension-host:
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        vscode: [stable]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
+        with: { node-version: '22.22.2', cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm install --no-save --ignore-scripts @vscode/test-electron@3.1.0
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && (sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2)
+      - if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
+      - if: runner.os != 'Linux'
+        run: npm run test:integration
+  minimum:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env: { VSCODE_TEST_VERSION: '1.90.0' }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
+        with: { node-version: '22.22.2', cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm install --no-save --ignore-scripts @vscode/test-electron@3.1.0
+      - run: sudo apt-get update && (sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2t64 || sudo apt-get install -y xvfb libgtk-3-0 libnss3 libasound2)
+      - run: xvfb-run -a npm run test:integration

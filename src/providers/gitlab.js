@@ -1,78 +1,33 @@
 'use strict';
-const { HttpClient } = require('../http-client');
-const { unique } = require('../util');
-function enc(v) { return encodeURIComponent(String(v)); }
-function parseVersion(value) { const m=String(value||'').match(/^(\d+)\.(\d+)\.(\d+)/); return m ? m.slice(1).map(Number) : null; }
-function versionAtLeast(value, minimum) { const a=parseVersion(value), b=parseVersion(minimum); if(!a||!b) return false; for(let i=0;i<3;i++){ if(a[i]>b[i]) return true; if(a[i]<b[i]) return false; } return true; }
-function checkState(status, allowFailure = false) {
-  const normalized = String(status || '').toLowerCase();
-  if (['success', 'skipped'].includes(normalized)) return 'success';
-  if (normalized === 'manual') return allowFailure ? 'success' : 'pending';
-  if (['failed', 'canceled', 'canceling'].includes(normalized)) return allowFailure ? 'success' : 'failure';
-  if (['running', 'pending', 'created', 'preparing', 'waiting_for_resource', 'waiting_for_callback', 'scheduled'].includes(normalized)) return 'pending';
-  return 'failure';
+const { HttpClient }=require('../http-client'); const { unique }=require('../util');
+function enc(v){return encodeURIComponent(String(v));} function parseVersion(v){const m=String(v||'').match(/^(\d+)\.(\d+)\.(\d+)/);return m?m.slice(1).map(Number):null;} function versionAtLeast(v,min){const a=parseVersion(v),b=parseVersion(min);if(!a||!b)return false;for(let i=0;i<3;i++){if(a[i]>b[i])return true;if(a[i]<b[i])return false;}return true;}
+function checkState(status,allowFailure=false){const s=String(status||'').toLowerCase();if(['success','skipped'].includes(s))return'success';if(s==='manual')return allowFailure?'success':'pending';if(['failed','canceled','canceling'].includes(s))return allowFailure?'success':'failure';if(['running','pending','created','preparing','waiting_for_resource','waiting_for_callback','scheduled'].includes(s))return'pending';return'failure';} function jobCheckState(j){return checkState(j?.status,j?.allow_failure===true);} function externalState(s){return s==='passed'?'success':s==='pending'?'pending':'failure';}
+const WAITING=new Set(['approvals_syncing','checking','ci_still_running','merge_time','not_approved','preparing','security_policy_pipeline_check','status_checks_must_pass','unchecked']);
+const BLOCKED=new Set(['ci_must_pass','commits_status','conflict','discussions_not_resolved','draft_status','jira_association_missing','locked_lfs_files','merge_request_blocked','need_rebase','not_open','policies_denied','requested_changes','security_policy_violations','title_regex']);
+class GitLabProvider{
+ constructor({remote,sourceRemote,apiBaseUrl,token,timeoutMs,allowInsecureHttp}){this.kind='gitlab';this.remote=remote;this.targetRemote=remote;this.sourceRemote=sourceRemote||remote;this.project=remote.projectPath;this.hasToken=Boolean(token);this.client=new HttpClient({baseUrl:apiBaseUrl,token,tokenHeader:'PRIVATE-TOKEN',timeoutMs,allowInsecureHttp,userAgent:'codex-change-safe/5 gitlab'});}
+ path(suffix='',remote=this.targetRemote){return`/projects/${enc(remote.projectPath)}${suffix}`;}
+ async projectInfo(remote=this.targetRemote){const key=remote.projectPath;if(!this._projects)this._projects=new Map();if(!this._projects.has(key))this._projects.set(key,(await this.client.request('GET',this.path('',remote))).data);return this._projects.get(key);}
+ async getDefaultBranch(){return(await this.projectInfo()).default_branch||'';}
+ async getVersion(){if(this.versionInfo)return this.versionInfo;this.versionInfo=(await this.client.request('GET','/version')).data;return this.versionInfo;}
+ async validateCompatibility(){const info=await this.getVersion(),version=String(info?.version||'');if(!parseVersion(version))throw Object.assign(new Error('GitLab version could not be determined safely.'),{code:'EGITLABVERSION'});if(!versionAtLeast(version,'14.6.1'))throw Object.assign(new Error(`GitLab ${version} is below supported minimum 14.6.1.`),{code:'EGITLABVERSION'});return{version,autoMergeParameter:versionAtLeast(version,'17.11.0')?'auto_merge':'merge_when_pipeline_succeeds'};}
+ async getSourceBranchSha(branch){const r=await this.client.request('GET',this.path(`/repository/branches/${enc(branch)}`,this.sourceRemote));return r.data?.commit?.id||'';} async getTargetBranchSha(branch){const r=await this.client.request('GET',this.path(`/repository/branches/${enc(branch)}`));return r.data?.commit?.id||'';} getBranchSha(branch){return this.getTargetBranchSha(branch);}
+ async findOpenChangeRequest(sourceBranch,targetBranch){const source=await this.projectInfo(this.sourceRemote);const result=await this.client.paginate(this.path('/merge_requests'),{state:'opened',source_branch:sourceBranch,target_branch:targetBranch,scope:'all'});if(!result.complete)throw Object.assign(new Error('Could not exhaustively scan open merge requests.'),{code:'ESCMPAGINATION'});return result.items.find(x=>!source?.id||Number(x.source_project_id)===Number(source.id))||null;}
+ async createChangeRequest({sourceBranch,targetBranch,title,body,draft}){const effectiveTitle=draft&&!/^\s*(draft:|wip:)/i.test(title)?`Draft: ${title}`:title;const source=await this.projectInfo(this.sourceRemote),target=await this.projectInfo(this.targetRemote);const cross=Number(source.id)!==Number(target.id);const endpoint=cross?this.path('/merge_requests',this.sourceRemote):this.path('/merge_requests');const payload={source_branch:sourceBranch,target_branch:targetBranch,title:effectiveTitle,description:body,allow_collaboration:true};if(cross)payload.target_project_id=target.id;return(await this.client.request('POST',endpoint,{body:payload,expected:[201]})).data;}
+ async updateChangeRequest(iid,{title,body}){const payload={description:body};if(title!==undefined)payload.title=title;return(await this.client.request('PUT',this.path(`/merge_requests/${iid}`),{body:payload})).data;}
+ async getChangeRequest(iid){return(await this.client.request('GET',this.path(`/merge_requests/${iid}`),{query:{include_diverged_commits_count:true}})).data;}
+ async listPipelines(iid){const r=await this.client.paginate(this.path(`/merge_requests/${iid}/pipelines`));if(!r.complete)throw Object.assign(new Error('Could not exhaustively scan merge request pipelines.'),{code:'ESCMPAGINATION'});return r.items;}
+ async listChecks(iid){const mr=await this.getChangeRequest(iid);let pipeline=mr?.head_pipeline||null;if(!pipeline)pipeline=(await this.listPipelines(iid))[0]||null;if(!pipeline?.id)return[];const probe=await this.client.request('GET',this.path(`/pipelines/${pipeline.id}/jobs`),{query:{per_page:100,page:1,include_retried:false},expected:[200,403,404]});if(probe.status===200){const paged=await this.client.paginate(this.path(`/pipelines/${pipeline.id}/jobs`),{include_retried:false});if(!paged.complete)throw Object.assign(new Error('Could not exhaustively scan pipeline jobs.'),{code:'ESCMPAGINATION'});if(paged.items.length)return paged.items.map(j=>({name:j.name,state:jobCheckState(j),url:j.web_url||'',pipelineId:pipeline.id,jobId:j.id,allowFailure:j.allow_failure===true}));}return[{name:`pipeline:${pipeline.id}`,state:checkState(pipeline.status),url:pipeline.web_url||'',pipelineId:pipeline.id}];}
+ async listExternalStatusChecks(iid){const r=await this.client.request('GET',this.path(`/merge_requests/${iid}/status_checks`),{expected:[200,403,404]});if(r.status!==200||!Array.isArray(r.data))return[];return r.data.map(c=>({name:c.name||`external:${c.id}`,state:externalState(c.status),url:c.external_url||'',externalStatusCheckId:c.id}));}
+ async listApprovals(iid){const r=await this.client.request('GET',this.path(`/merge_requests/${iid}/approvals`),{expected:[200,403,404]});return r.status===200?(r.data?.approved_by||[]).map(x=>x.user?.username).filter(Boolean):[];} async getApprovalState(iid){const r=await this.client.request('GET',this.path(`/merge_requests/${iid}/approval_state`),{expected:[200,403,404]});return r.status===200?r.data:null;}
+ async getMergePolicySnapshot(){return{status:'available',requiredChecks:[],requiredApprovals:0,requireCodeOwners:false,requireThreadResolution:false,mergeQueue:false,allowedMergeMethods:[]};}
+ async resolveUsers(names){const out=[];for(const username of unique(names)){const r=await this.client.request('GET','/users',{query:{username}});const exact=(r.data||[]).find(u=>u.username===username);if(exact)out.push(exact);}return out;}
+ async requestReviewers(iid,routing){const users=await this.resolveUsers(routing?.users||[]),current=await this.getChangeRequest(iid);const existing=Array.isArray(current?.reviewers)?current.reviewers.map(u=>u.id).filter(Boolean):[];if(users.length)await this.client.request('PUT',this.path(`/merge_requests/${iid}`),{body:{reviewer_ids:unique([...existing,...users.map(u=>u.id)])}});return{unresolvedTeams:unique(routing?.teams||[])};}
+ async addLabels(iid,labels){if(!labels.length)return null;return(await this.client.request('PUT',this.path(`/merge_requests/${iid}`),{body:{add_labels:unique(labels).join(',')}})).data;}
+ classifyMergeState(fresh){const s=String(fresh.mergeState||'unknown');if(s==='mergeable')return{status:'ready',code:'mergeable',message:'GitLab reports mergeable.'};if(BLOCKED.has(s))return{status:'blocked',code:`gitlab_${s}`,message:`GitLab merge state blocks merge: ${s}.`};if(WAITING.has(s))return{status:'waiting',code:'merge_state_pending',message:`GitLab mergeability is waiting: ${s}.`};return{status:'waiting',code:'merge_state_unknown',message:`Unknown GitLab detailed_merge_status ${s}; fail closed.`};}
+ async markReady(change){const title=String(change.title||'').replace(/^\s*(draft:|wip:)\s*/i,'');return this.updateChangeRequest(change.iid,{title,body:change.description||''});}
+ async enableAutoMerge(change){const cap=await this.validateCompatibility();const body={sha:change.sha};body[cap.autoMergeParameter]=true;return(await this.client.request('PUT',this.path(`/merge_requests/${change.iid}/merge`),{body,expected:[200,201,202]})).data;}
+ async enqueueMergeTrain(change){const cap=await this.validateCompatibility();const body={sha:change.sha};if(versionAtLeast(cap.version,'17.11.0'))body.auto_merge=true;else body.when_pipeline_succeeds=true;return(await this.client.request('POST',this.path(`/merge_trains/merge_requests/${change.iid}`),{body,expected:[201,202,403,404]})).data;}
+ openUrl(c){return c.web_url;} normalize(c){return{provider:'gitlab',number:c.iid,id:c.id,title:c.title,body:c.description||'',url:c.web_url,draft:Boolean(c.draft??c.work_in_progress??/^\s*(draft:|wip:)/i.test(c.title||'')),state:c.state,headSha:c.sha||c.diff_refs?.head_sha||'',sourceBranch:c.source_branch||'',targetBranch:c.target_branch||'',conflicts:Boolean(c.has_conflicts),mergeState:c.detailed_merge_status||c.merge_status||'unknown',blockingDiscussionsResolved:c.blocking_discussions_resolved,raw:c};}
 }
-function jobCheckState(job) { return checkState(job?.status, job?.allow_failure === true); }
-
-class GitLabProvider {
-  constructor({ remote, apiBaseUrl, token, timeoutMs, allowInsecureHttp }) {
-    this.kind = 'gitlab'; this.remote = remote; this.project = remote.projectPath; this.hasToken = Boolean(token);
-    this.client = new HttpClient({ baseUrl: apiBaseUrl, token, tokenHeader: 'PRIVATE-TOKEN', timeoutMs, allowInsecureHttp, userAgent: 'codex-change-safe/5 gitlab' });
-  }
-  path(suffix = '') { return `/projects/${enc(this.project)}${suffix}`; }
-  async getVersion() { if (this.versionInfo) return this.versionInfo; this.versionInfo = (await this.client.request('GET', '/version')).data; return this.versionInfo; }
-  async validateCompatibility() { const info=await this.getVersion(); const version=String(info?.version||''); if(!parseVersion(version)) throw Object.assign(new Error('GitLab version could not be determined safely.'),{code:'EGITLABVERSION'}); if(!versionAtLeast(version,'14.6.1')) throw Object.assign(new Error(`GitLab ${version} is below the supported minimum 14.6.1.`),{code:'EGITLABVERSION'}); return { version, autoMergeParameter: versionAtLeast(version,'17.11.0') ? 'auto_merge' : 'merge_when_pipeline_succeeds' }; }
-  async getBranchSha(branch) { const r = await this.client.request('GET', this.path(`/repository/branches/${enc(branch)}`)); return r.data?.commit?.id || ''; }
-  async findOpenChangeRequest(sourceBranch, targetBranch) {
-    const result = await this.client.paginate(this.path('/merge_requests'), { state: 'opened', source_branch: sourceBranch, target_branch: targetBranch, scope: 'all' });
-    if (!result.complete) throw Object.assign(new Error('Could not exhaustively scan open merge requests.'), { code: 'ESCMPAGINATION' });
-    return result.items[0] || null;
-  }
-  async createChangeRequest({ sourceBranch, targetBranch, title, body, draft }) {
-    const effectiveTitle = draft && !/^\s*(draft:|wip:)/i.test(title) ? `Draft: ${title}` : title;
-    return (await this.client.request('POST', this.path('/merge_requests'), { body: { source_branch: sourceBranch, target_branch: targetBranch, title: effectiveTitle, description: body, allow_collaboration: true }, expected: [201] })).data;
-  }
-  async updateChangeRequest(iid, { title, body }) { return (await this.client.request('PUT', this.path(`/merge_requests/${iid}`), { body: { title, description: body } })).data; }
-  async getChangeRequest(iid) { return (await this.client.request('GET', this.path(`/merge_requests/${iid}`), { query: { include_diverged_commits_count: true } })).data; }
-  async listPipelines(iid) { const result = await this.client.paginate(this.path(`/merge_requests/${iid}/pipelines`)); if (!result.complete) throw Object.assign(new Error('Could not exhaustively scan merge request pipelines.'), { code: 'ESCMPAGINATION' }); return result.items; }
-  async listChecks(iid) {
-    const mr = await this.getChangeRequest(iid);
-    let pipeline = mr?.head_pipeline || null;
-    if (!pipeline) pipeline = (await this.listPipelines(iid))[0] || null;
-    if (!pipeline?.id) return [];
-    const probe = await this.client.request('GET', this.path(`/pipelines/${pipeline.id}/jobs`), { query: { per_page: 100, page: 1, include_retried: false }, expected: [200, 403, 404] });
-    if (probe.status === 200) {
-      const paged = await this.client.paginate(this.path(`/pipelines/${pipeline.id}/jobs`), { include_retried: false });
-      if (!paged.complete) throw Object.assign(new Error('Could not exhaustively scan pipeline jobs.'), { code: 'ESCMPAGINATION' });
-      if (paged.items.length) return paged.items.map(job => ({ name: job.name, state: jobCheckState(job), url: job.web_url || '', pipelineId: pipeline.id, jobId: job.id, allowFailure: job.allow_failure === true }));
-    }
-    return [{ name: `pipeline:${pipeline.id}`, state: checkState(pipeline.status), url: pipeline.web_url || '', pipelineId: pipeline.id }];
-  }
-  async listApprovals(iid) {
-    const r = await this.client.request('GET', this.path(`/merge_requests/${iid}/approvals`), { expected: [200, 403, 404] });
-    if (r.status !== 200) return [];
-    return (r.data?.approved_by || []).map(x => x.user?.username).filter(Boolean);
-  }
-  async getApprovalState(iid) {
-    const r = await this.client.request('GET', this.path(`/merge_requests/${iid}/approval_state`), { expected: [200, 403, 404] });
-    return r.status === 200 ? r.data : null;
-  }
-  async resolveUsers(usernames) {
-    const out = [];
-    for (const username of unique(usernames)) {
-      const r = await this.client.request('GET', '/users', { query: { username } }); const exact = (r.data || []).find(u => u.username === username); if (exact) out.push(exact);
-    }
-    return out;
-  }
-  async requestReviewers(iid, reviewers) {
-    if (!reviewers.length) return null; const [users, current] = await Promise.all([this.resolveUsers(reviewers), this.getChangeRequest(iid)]); if (!users.length) return null;
-    const existing = Array.isArray(current?.reviewers) ? current.reviewers.map(u => u.id).filter(Boolean) : [];
-    return (await this.client.request('PUT', this.path(`/merge_requests/${iid}`), { body: { reviewer_ids: unique([...existing, ...users.map(u => u.id)]) } })).data;
-  }
-  async addLabels(iid, labels) { if (!labels.length) return null; return (await this.client.request('PUT', this.path(`/merge_requests/${iid}`), { body: { add_labels: unique(labels).join(',') } })).data; }
-  async markReady(change) { const title = String(change.title || '').replace(/^\s*(draft:|wip:)\s*/i, ''); return this.updateChangeRequest(change.iid, { title, body: change.description || '' }); }
-  async enableAutoMerge(change) { const capability=await this.validateCompatibility(); const body={ sha: change.sha }; body[capability.autoMergeParameter]=true; return (await this.client.request('PUT', this.path(`/merge_requests/${change.iid}/merge`), { body, expected: [200, 201, 202] })).data; }
-  openUrl(change) { return change.web_url; }
-  normalize(change) { return { provider: 'gitlab', number: change.iid, id: change.id, title: change.title, body: change.description || '', url: change.web_url, draft: Boolean(change.draft ?? change.work_in_progress ?? /^\s*(draft:|wip:)/i.test(change.title || '')), state: change.state, headSha: change.sha || change.diff_refs?.head_sha || '', sourceBranch: change.source_branch || '', targetBranch: change.target_branch || '', conflicts: Boolean(change.has_conflicts), mergeState: change.detailed_merge_status || change.merge_status || 'unknown', blockingDiscussionsResolved: change.blocking_discussions_resolved, raw: change }; }
-}
-module.exports = { GitLabProvider, enc, checkState, jobCheckState, parseVersion, versionAtLeast };
+module.exports={GitLabProvider,enc,checkState,jobCheckState,externalState,parseVersion,versionAtLeast,WAITING,BLOCKED};

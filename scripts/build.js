@@ -1,0 +1,2 @@
+'use strict';
+const{spawnSync}=require('node:child_process');const fs=require('node:fs');fs.rmSync('dist',{recursive:true,force:true});fs.mkdirSync('dist',{recursive:true});const cmd=process.platform==='win32'?'npx.cmd':'npx';const r=spawnSync(cmd,['--yes','esbuild@0.28.2','extension.js','--bundle','--platform=node','--format=cjs','--target=node20','--external:vscode','--outfile=dist/extension.js'],{stdio:'inherit'});if(r.status!==0)process.exit(r.status||1);

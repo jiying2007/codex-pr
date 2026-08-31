@@ -1,169 +1,42 @@
 'use strict';
 const { HttpClient } = require('../http-client');
 const { unique } = require('../util');
-
 const API_VERSION_HEADERS = { 'X-GitHub-Api-Version': '2026-03-10' };
-
-function statusState(value) {
-  if (value === 'success') return 'success';
-  if (value === 'pending') return 'pending';
-  return 'failure';
+function statusState(v){return v==='success'?'success':v==='pending'?'pending':'failure';}
+function checkRunState(r){if(r?.status!=='completed')return'pending';return['success','neutral','skipped'].includes(r?.conclusion)?'success':'failure';}
+function requiredChecksFromRules(rules){const out=[];for(const rule of rules||[]){if(rule?.type!=='required_status_checks')continue;for(const c of rule?.parameters?.required_status_checks||[])if(c?.context)out.push({name:c.context,integrationId:c.integration_id||c.app_id||null});}return out;}
+function parsePullRequestRule(rule){if(rule?.type!=='pull_request')return null;const p=rule.parameters||{};return{requiredApprovals:Number(p.required_approving_review_count||0),requireCodeOwners:Boolean(p.require_code_owner_review),requireLastPushApproval:Boolean(p.require_last_push_approval),dismissStaleApprovals:Boolean(p.dismiss_stale_reviews_on_push),requireThreadResolution:Boolean(p.required_review_thread_resolution)};}
+class GitHubProvider{
+  constructor({remote,sourceRemote,apiBaseUrl,token,timeoutMs,allowInsecureHttp}){this.kind='github';this.remote=remote;this.targetRemote=remote;this.sourceRemote=sourceRemote||remote;this.repo=remote.projectPath;this.apiHeaders=remote.host==='github.com'?API_VERSION_HEADERS:{};this.hasToken=Boolean(token);this.client=new HttpClient({baseUrl:apiBaseUrl,token,tokenHeader:'Authorization',tokenPrefix:'Bearer ',timeoutMs,allowInsecureHttp,userAgent:'codex-change-safe/5 github'});}
+  path(suffix='',remote=this.targetRemote){return`/repos/${remote.projectPath}${suffix}`;}
+  async getDefaultBranch(){return(await this.client.request('GET',this.path(),{headers:this.apiHeaders})).data?.default_branch||'';}
+  async getSourceBranchSha(branch){const r=await this.client.request('GET',this.path(`/branches/${encodeURIComponent(branch)}`,this.sourceRemote),{headers:this.apiHeaders});return r.data?.commit?.sha||'';}
+  async getTargetBranchSha(branch){const r=await this.client.request('GET',this.path(`/branches/${encodeURIComponent(branch)}`),{headers:this.apiHeaders});return r.data?.commit?.sha||'';}
+  getBranchSha(branch){return this.getTargetBranchSha(branch);}
+  crossRepository(){return this.sourceRemote.projectPath.toLowerCase()!==this.targetRemote.projectPath.toLowerCase();}
+  async findOpenChangeRequest(sourceBranch,targetBranch){const head=`${this.sourceRemote.owner}:${sourceBranch}`;const result=await this.client.paginate(this.path('/pulls'),{state:'open',head,base:targetBranch},{headers:this.apiHeaders});if(!result.complete)throw Object.assign(new Error('Could not exhaustively scan open pull requests.'),{code:'ESCMPAGINATION'});return result.items[0]||null;}
+  async createChangeRequest({sourceBranch,targetBranch,title,body,draft}){const cross=this.crossRepository();const payload={head:cross?`${this.sourceRemote.owner}:${sourceBranch}`:sourceBranch,base:targetBranch,title,body,draft:Boolean(draft)};if(cross)payload.head_repo=this.sourceRemote.projectPath;return(await this.client.request('POST',this.path('/pulls'),{body:payload,expected:[201],headers:this.apiHeaders})).data;}
+  async updateChangeRequest(number,{title,body}){const payload={body};if(title!==undefined)payload.title=title;return(await this.client.request('PATCH',this.path(`/pulls/${number}`),{body:payload,headers:this.apiHeaders})).data;}
+  async getChangeRequest(number){return(await this.client.request('GET',this.path(`/pulls/${number}`),{headers:this.apiHeaders})).data;}
+  async listChecks(sha){const[statuses,runs]=await Promise.all([this.client.paginate(this.path(`/commits/${sha}/statuses`),{},{headers:this.apiHeaders}),this.client.paginateCollection(this.path(`/commits/${sha}/check-runs`),'check_runs',{},{headers:this.apiHeaders}).catch(()=>({items:[],complete:true}))]);if(!statuses.complete||!runs.complete)throw Object.assign(new Error('Could not exhaustively scan GitHub checks.'),{code:'ESCMPAGINATION'});const out=[];for(const s of statuses.items||[])out.push({name:s.context,state:statusState(s.state),url:s.target_url||'',integrationId:null});for(const r of runs.items||[])out.push({name:r.name,state:checkRunState(r),url:r.html_url||'',integrationId:r.app?.id||null});const dedup=new Map();for(const item of out){const key=`${item.name}#${item.integrationId||''}`;if(!dedup.has(key))dedup.set(key,item);}return[...dedup.values()];}
+  async getMergePolicySnapshot(targetBranch){const branch=encodeURIComponent(targetBranch);const[protection,rulesProbe]=await Promise.all([this.client.request('GET',this.path(`/branches/${branch}/protection`),{expected:[200,403,404],headers:this.apiHeaders}),this.client.request('GET',this.path(`/rules/branches/${branch}`),{query:{per_page:100,page:1},expected:[200,403,404],headers:this.apiHeaders})]);let rules=[];if(rulesProbe.status===200){const paged=await this.client.paginate(this.path(`/rules/branches/${branch}`),{},{headers:this.apiHeaders});if(!paged.complete)throw Object.assign(new Error('Could not exhaustively scan active GitHub branch rules.'),{code:'ESCMPAGINATION'});rules=paged.items;}
+    const classicChecks=[];if(protection.status===200){for(const c of protection.data?.required_status_checks?.contexts||[])classicChecks.push({name:c,integrationId:null});for(const c of protection.data?.required_status_checks?.checks||[])if(c?.context)classicChecks.push({name:c.context,integrationId:c.app_id||null});}
+    const prRules=rules.map(parsePullRequestRule).filter(Boolean);const classicReviews=protection.status===200?protection.data?.required_pull_request_reviews||{}:{};
+    const requiredApprovals=Math.max(Number(classicReviews.required_approving_review_count||0),...prRules.map(r=>r.requiredApprovals),0);
+    const requiredChecks=[...new Map([...classicChecks,...requiredChecksFromRules(rules)].map(x=>[`${x.name}#${x.integrationId||''}`,x])).values()];
+    const mergeQueue=rules.some(r=>r?.type==='merge_queue');const allowedMergeMethods=unique(rules.filter(r=>r?.type==='pull_request').flatMap(r=>r?.parameters?.allowed_merge_methods||[]));
+    const unknown=protection.status===403||rulesProbe.status===403;
+    return{status:unknown?'unknown':(requiredChecks.length||requiredApprovals||rules.length?'available':'none'),requiredChecks,requiredApprovals,requireCodeOwners:Boolean(classicReviews.require_code_owner_reviews||prRules.some(r=>r.requireCodeOwners)),requireLastPushApproval:prRules.some(r=>r.requireLastPushApproval),dismissStaleApprovals:Boolean(classicReviews.dismiss_stale_reviews||prRules.some(r=>r.dismissStaleApprovals)),requireThreadResolution:prRules.some(r=>r.requireThreadResolution),mergeQueue,allowedMergeMethods,rules};
+  }
+  async listApprovals(number){const result=await this.client.paginate(this.path(`/pulls/${number}/reviews`),{},{headers:this.apiHeaders});if(!result.complete)throw Object.assign(new Error('Could not exhaustively scan pull request reviews.'),{code:'ESCMPAGINATION'});const latest=new Map();for(const review of result.items||[])if(review.user?.login&&review.state!=='PENDING')latest.set(review.user.login,review.state);return[...latest.entries()].filter(([,s])=>s==='APPROVED').map(([u])=>u);}
+  async requestReviewers(number,routing){const users=unique(routing?.users||[]);const teams=unique((routing?.teams||[]).map(t=>t.includes('/')?t.split('/').slice(1).join('/'):t));if(!users.length&&!teams.length)return null;return(await this.client.request('POST',this.path(`/pulls/${number}/requested_reviewers`),{body:{reviewers:users,team_reviewers:teams},expected:[201],headers:this.apiHeaders})).data;}
+  async addLabels(number,labels){if(!labels.length)return null;return(await this.client.request('POST',this.path(`/issues/${number}/labels`),{body:{labels:unique(labels)},headers:this.apiHeaders})).data;}
+  classifyMergeState(fresh){if(fresh.conflicts)return{status:'blocked',code:'conflicts',message:'GitHub reports merge conflicts.'};const s=String(fresh.mergeState||'unknown');if(s==='clean')return{status:'ready',code:'merge_state_clean',message:'GitHub merge state is clean.'};if(['blocked','behind','unstable','has_hooks','draft','unknown',''].includes(s))return{status:'waiting',code:'merge_state_pending',message:`GitHub mergeability is not conclusively ready: ${s||'unknown'}.`};if(s==='dirty')return{status:'blocked',code:'merge_state_dirty',message:'GitHub merge state is dirty/conflicted.'};return{status:'waiting',code:'merge_state_unknown',message:`Unknown GitHub merge state ${s}; fail closed.`};}
+  async graphql(query,variables){let base=this.client.baseUrl;if(base.endsWith('/api/v3'))base=base.slice(0,-7)+'/api/graphql';else if(new URL(base).hostname==='api.github.com')base='https://api.github.com/graphql';else base=`${base.replace(/\/$/,'')}/graphql`;const parsed=new URL(base);const client=new HttpClient({baseUrl:parsed.origin,token:this.client.token,tokenHeader:'Authorization',tokenPrefix:'Bearer ',timeoutMs:this.client.timeoutMs,allowInsecureHttp:parsed.protocol==='http:',userAgent:'codex-change-safe/5 github-graphql'});const r=await client.request('POST',parsed.pathname,{body:{query,variables}});if(r.data?.errors?.length)throw Object.assign(new Error(`GitHub GraphQL: ${r.data.errors[0].message}`),{code:'EGITHUBGRAPHQL',details:r.data.errors});return r.data?.data;}
+  async markReady(change){const d=await this.graphql('mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{id isDraft}}}',{id:change.node_id});return d?.markPullRequestReadyForReview?.pullRequest;}
+  async enableAutoMerge(change,mergeMethod='SQUASH'){const d=await this.graphql('mutation($id:ID!,$method:PullRequestMergeMethod!){enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:$method}){pullRequest{id autoMergeRequest{enabledAt}}}}',{id:change.node_id,method:mergeMethod});return d?.enablePullRequestAutoMerge?.pullRequest;}
+  async enqueueMergeQueue(change){const d=await this.graphql('mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id}){mergeQueueEntry{id position}}}',{id:change.node_id});return d?.enqueuePullRequest?.mergeQueueEntry;}
+  openUrl(c){return c.html_url;}
+  normalize(c){return{provider:'github',number:c.number,id:c.id,nodeId:c.node_id,title:c.title,body:c.body||'',url:c.html_url,draft:Boolean(c.draft),state:c.state,headSha:c.head?.sha||'',sourceBranch:c.head?.ref||'',targetBranch:c.base?.ref||'',conflicts:c.mergeable===false,mergeState:c.mergeable_state||'unknown',raw:c};}
 }
-function checkRunState(run) {
-  if (run?.status !== 'completed') return 'pending';
-  return ['success', 'neutral', 'skipped'].includes(run?.conclusion) ? 'success' : 'failure';
-}
-function requiredChecksFromRules(rules) {
-  const names = [];
-  for (const rule of rules || []) {
-    if (rule?.type !== 'required_status_checks') continue;
-    for (const check of rule?.parameters?.required_status_checks || []) if (check?.context) names.push(check.context);
-  }
-  return unique(names);
-}
-
-class GitHubProvider {
-  constructor({ remote, apiBaseUrl, token, timeoutMs, allowInsecureHttp }) {
-    this.kind = 'github';
-    this.remote = remote;
-    this.repo = remote.projectPath;
-    this.apiHeaders = remote.host === 'github.com' ? API_VERSION_HEADERS : {};
-    this.hasToken = Boolean(token);
-    this.client = new HttpClient({
-      baseUrl: apiBaseUrl,
-      token,
-      tokenHeader: 'Authorization',
-      tokenPrefix: 'Bearer ',
-      timeoutMs,
-      allowInsecureHttp,
-      userAgent: 'codex-change-safe/5 github'
-    });
-  }
-  path(suffix = '') { return `/repos/${this.repo}${suffix}`; }
-  async getBranchSha(branch) {
-    const r = await this.client.request('GET', this.path(`/branches/${encodeURIComponent(branch)}`), { headers: this.apiHeaders });
-    return r.data?.commit?.sha || '';
-  }
-  async findOpenChangeRequest(sourceBranch, targetBranch) {
-    const owner = this.remote.owner;
-    const result = await this.client.paginate(this.path('/pulls'), { state: 'open', head: `${owner}:${sourceBranch}`, base: targetBranch }, { headers: this.apiHeaders });
-    if (!result.complete) throw Object.assign(new Error('Could not exhaustively scan open pull requests.'), { code: 'ESCMPAGINATION' });
-    return result.items[0] || null;
-  }
-  async createChangeRequest({ sourceBranch, targetBranch, title, body, draft }) {
-    return (await this.client.request('POST', this.path('/pulls'), {
-      body: { head: sourceBranch, base: targetBranch, title, body, draft: Boolean(draft) },
-      expected: [201],
-      headers: this.apiHeaders
-    })).data;
-  }
-  async updateChangeRequest(number, { title, body }) {
-    return (await this.client.request('PATCH', this.path(`/pulls/${number}`), { body: { title, body }, headers: this.apiHeaders })).data;
-  }
-  async getChangeRequest(number) {
-    return (await this.client.request('GET', this.path(`/pulls/${number}`), { headers: this.apiHeaders })).data;
-  }
-  async listChecks(sha) {
-    const [statuses, runs] = await Promise.all([
-      this.client.paginate(this.path(`/commits/${sha}/statuses`), {}, { headers: this.apiHeaders }),
-      this.client.paginateCollection(this.path(`/commits/${sha}/check-runs`), 'check_runs', {}, { headers: this.apiHeaders }).catch(() => ({ items: [], complete: true }))
-    ]);
-    if (!statuses.complete || !runs.complete) throw Object.assign(new Error('Could not exhaustively scan GitHub checks.'), { code: 'ESCMPAGINATION' });
-    const out = [];
-    for (const s of statuses.items || []) out.push({ name: s.context, state: statusState(s.state), url: s.target_url || '' });
-    for (const r of runs.items || []) out.push({ name: r.name, state: checkRunState(r), url: r.html_url || '' });
-    const dedup = new Map();
-    for (const item of out) if (!dedup.has(item.name)) dedup.set(item.name, item);
-    return [...dedup.values()];
-  }
-  async getRequiredCheckNames(targetBranch) {
-    const branch = encodeURIComponent(targetBranch);
-    const classic = await this.client.request('GET', this.path(`/branches/${branch}/protection/required_status_checks`), {
-      expected: [200, 403, 404], headers: this.apiHeaders
-    });
-    const rulesProbe = await this.client.request('GET', this.path(`/rules/branches/${branch}`), {
-      query: { per_page: 100, page: 1 }, expected: [200, 403, 404], headers: this.apiHeaders
-    });
-
-    let rules = [];
-    if (rulesProbe.status === 200) {
-      const paged = await this.client.paginate(this.path(`/rules/branches/${branch}`), {}, { headers: this.apiHeaders });
-      if (!paged.complete) throw Object.assign(new Error('Could not exhaustively scan active GitHub branch rules.'), { code: 'ESCMPAGINATION' });
-      rules = paged.items;
-    }
-
-    const classicNames = classic.status === 200
-      ? unique([
-          ...(Array.isArray(classic.data?.contexts) ? classic.data.contexts : []),
-          ...(Array.isArray(classic.data?.checks) ? classic.data.checks.map(x => x.context).filter(Boolean) : [])
-        ])
-      : [];
-    const rulesetNames = requiredChecksFromRules(rules);
-    const names = unique([...classicNames, ...rulesetNames]);
-
-    if (classic.status === 403 || rulesProbe.status === 403) return { status: 'unknown', names };
-    return { status: names.length ? 'available' : 'none', names };
-  }
-  async listApprovals(number) {
-    const result = await this.client.paginate(this.path(`/pulls/${number}/reviews`), {}, { headers: this.apiHeaders });
-    if (!result.complete) throw Object.assign(new Error('Could not exhaustively scan pull request reviews.'), { code: 'ESCMPAGINATION' });
-    const latest = new Map();
-    for (const review of result.items || []) if (review.user?.login && review.state !== 'PENDING') latest.set(review.user.login, review.state);
-    return [...latest.entries()].filter(([, state]) => state === 'APPROVED').map(([username]) => username);
-  }
-  async requestReviewers(number, reviewers) {
-    if (!reviewers.length) return null;
-    return (await this.client.request('POST', this.path(`/pulls/${number}/requested_reviewers`), {
-      body: { reviewers: unique(reviewers) }, expected: [201], headers: this.apiHeaders
-    })).data;
-  }
-  async addLabels(number, labels) {
-    if (!labels.length) return null;
-    return (await this.client.request('POST', this.path(`/issues/${number}/labels`), { body: { labels: unique(labels) }, headers: this.apiHeaders })).data;
-  }
-  async graphql(query, variables) {
-    let base = this.client.baseUrl;
-    if (base.endsWith('/api/v3')) base = base.slice(0, -7) + '/api/graphql';
-    else if (new URL(base).hostname === 'api.github.com') base = 'https://api.github.com/graphql';
-    else base = `${base.replace(/\/$/, '')}/graphql`;
-    const parsed = new URL(base);
-    const client = new HttpClient({
-      baseUrl: parsed.origin,
-      token: this.client.token,
-      tokenHeader: 'Authorization',
-      tokenPrefix: 'Bearer ',
-      timeoutMs: this.client.timeoutMs,
-      allowInsecureHttp: parsed.protocol === 'http:',
-      userAgent: 'codex-change-safe/5 github-graphql'
-    });
-    const r = await client.request('POST', parsed.pathname, { body: { query, variables } });
-    if (r.data?.errors?.length) {
-      const error = new Error(`GitHub GraphQL: ${r.data.errors[0].message}`);
-      error.code = 'EGITHUBGRAPHQL'; error.details = r.data.errors; throw error;
-    }
-    return r.data?.data;
-  }
-  async markReady(change) {
-    const data = await this.graphql('mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{id isDraft}}}', { id: change.node_id });
-    return data?.markPullRequestReadyForReview?.pullRequest;
-  }
-  async enableAutoMerge(change, mergeMethod = 'SQUASH') {
-    const data = await this.graphql('mutation($id:ID!,$method:PullRequestMergeMethod!){enablePullRequestAutoMerge(input:{pullRequestId:$id,mergeMethod:$method}){pullRequest{id autoMergeRequest{enabledAt}}}}', { id: change.node_id, method: mergeMethod });
-    return data?.enablePullRequestAutoMerge?.pullRequest;
-  }
-  async enqueueMergeQueue(change) {
-    const data = await this.graphql('mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id}){mergeQueueEntry{id position}}}', { id: change.node_id });
-    return data?.enqueuePullRequest?.mergeQueueEntry;
-  }
-  openUrl(change) { return change.html_url; }
-  normalize(change) {
-    return {
-      provider: 'github', number: change.number, id: change.id, nodeId: change.node_id,
-      title: change.title, body: change.body || '', url: change.html_url, draft: Boolean(change.draft),
-      state: change.state, headSha: change.head?.sha || '', sourceBranch: change.head?.ref || '',
-      targetBranch: change.base?.ref || '', conflicts: change.mergeable === false,
-      mergeState: change.mergeable_state || 'unknown', raw: change
-    };
-  }
-}
-module.exports = { GitHubProvider, statusState, checkRunState, requiredChecksFromRules };
+module.exports={GitHubProvider,statusState,checkRunState,requiredChecksFromRules,parsePullRequestRule};
