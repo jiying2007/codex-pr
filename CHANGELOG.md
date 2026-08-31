@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.1.3
+
+- Align the primary VS Code SCM toolbar with the Family UI Contract: Create / Update PR or MR is the single `navigation@7` Change action after Review and Commit.
+- Delivery Preflight remains available in the Change view and command surface, but no longer occupies the primary SCM toolbar.
+- Repin to immutable Safe Core 4.10.2; default model calls remain zero.
+
 ## 5.1.2
 
 - repin the exact immutable Safe Core 4.10.1 release that fixes active Change Product Contract verification;
