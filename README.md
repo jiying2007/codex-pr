@@ -33,7 +33,7 @@ See [Workflow](docs/WORKFLOW.md) and [GitLab Self-Managed](docs/GITLAB_SELF_MANA
 
 - Change-stage model calls are `0` by default; title/body/risk/evidence are deterministic from Git, receipts and SCM state.
 - Every remote mutation revalidates fresh delivery evidence through one Delivery Authorization Gate.
-- The only repository policy is committed `.codex-safe.json` **Policy Schema v4** from Safe Core 4.10.1.
+- The only repository policy is committed `.codex-safe.json` **Policy Schema v4** from Safe Core 4.10.2.
 - Change Safe consumes Core parsing, closed validation and policy fingerprinting; it does not own a parallel policy schema.
 - Local Change settings can only tighten committed `change` rules; provider-native requirements are unioned and cannot be weakened locally.
 - GitHub/GitLab merge states are provider-specific and fail closed; unknown states become `WAITING`.
@@ -53,7 +53,7 @@ Use the Family-wide committed `.codex-safe.json` with `schemaVersion: 4`:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/76418b80533c644e3ab01045290cd3cdd355622c/codex-safe.schema.json",
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/cd9788f1280a217fbe6d0beb59682a85a8b82c4d/codex-safe.schema.json",
   "schemaVersion": 4,
   "review": {},
   "commit": {},
@@ -129,7 +129,7 @@ npm run ci
 - Publisher: `jiying2007`
 - Extension ID: `jiying2007.codex-change-safe`
 - Settings: `safeCodexChange.*`
-- Safe Core: `4.10.0` exact pin `76418b80533c644e3ab01045290cd3cdd355622c`
+- Safe Core: `4.10.0` exact pin `cd9788f1280a217fbe6d0beb59682a85a8b82c4d`
 - Repository Policy: `.codex-safe.json` / Policy Schema v4
 
 ## License
