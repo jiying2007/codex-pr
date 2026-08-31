@@ -27,7 +27,7 @@ class HttpClient {
     if (this.token && this.tokenHeader) requestHeaders[this.tokenHeader] = `${this.tokenPrefix}${this.token}`;
     if (body !== undefined) requestHeaders['Content-Type'] = 'application/json';
     let response;
-    try { response = await fetch(url, { method, headers: requestHeaders, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs) }); }
+    try { response = await fetch(url, { method, headers: requestHeaders, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs), redirect: 'error' }); }
     catch (cause) { const error = new Error(`SCM ${method} ${url.origin}${url.pathname} network failure`); error.code = 'ESCMNETWORK'; error.cause = cause; throw error; }
     const text = await response.text(); let data = null;
     if (text) { try { data = JSON.parse(text); } catch { data = text; } }
