@@ -1,0 +1,18 @@
+{
+  "product": "Codex Change Safe",
+  "productVersion": "5.0.0",
+  "extensionId": "jiying2007.codex-change-safe",
+  "settingsNamespace": "safeCodexChange",
+  "changeReceiptSchema": 1,
+  "reviewReceiptSchemaConsumed": 4,
+  "commitReceiptSchemaConsumed": 4,
+  "reviewExtensionApiContractConsumed": 2,
+  "gitlabMinimum": "14.6.1",
+  "providers": [
+    "github",
+    "gitlab"
+  ],
+  "defaultModelCalls": 0,
+  "remoteWritesRequireConfirmation": true,
+  "commitExtensionApiContractConsumed": 1
+}
