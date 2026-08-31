@@ -33,7 +33,8 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 - Change 阶段默认模型调用为 `0`；title/body/risk/evidence 由 Git、Receipt 与 SCM state 确定性生成。
 - 所有远端 mutation 都统一经过最新 Delivery Authorization Gate，并重新验证当前交付证据。
-- `.codex-safe.json` 从 target branch committed policy 读取；本地设置只能加严，不能削弱 committed requirements。
+- `.codex-change-safe.json` 从 target branch committed policy 读取；本地设置只能加严，不能削弱 committed requirements。
+- Safe Core/Review/Commit 继续使用独立的 `.codex-safe.json` Policy Schema v3；Change Safe 不重载、不重新解释这个文件。
 - GitHub/GitLab 使用各自的 provider-specific merge-state classifier；未知状态一律进入 `WAITING`，不会隐式判定为 Ready。
 - GitHub 原生策略同时覆盖 classic branch protection 与 active Rulesets；可用时保留 required-check app/integration identity。
 - GitLab readiness 覆盖 pipeline/jobs、approvals 与 External Status Checks；Merge Train 按实例能力启用。
@@ -47,11 +48,11 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 ## Repository Policy
 
-推荐把交付门禁提交到 target branch 的 `.codex-safe.json`，使用 `schemaVersion: 4`：
+推荐把 Change Safe 交付门禁提交到 target branch 的 **`.codex-change-safe.json`**，使用 `schemaVersion: 1`：
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 1,
   "change": {
     "provenancePolicy": "require-all",
     "blockOnReviewFindings": true,
@@ -65,7 +66,9 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 }
 ```
 
-有效交付策略是 Provider 原生要求、committed repository policy 与本地 tightening settings 的并集。本地配置不能减少 required checks、approvals、provenance requirements 或 safety booleans。
+有效交付策略是 Provider 原生要求、committed Change Safe policy 与本地 tightening settings 的并集。本地配置不能减少 required checks、approvals、provenance requirements 或 safety booleans。
+
+`.codex-change-safe.json` 刻意与 Safe Core 的 `.codex-safe.json` Policy Schema v3 分离，因此 Review Safe、Commit Safe、Change Safe 可以在同一仓库同时使用而不会发生 schema 冲突。5.1.0 实验性的 `.codex-safe.json.change` 形式在 5.1.1 中不再接受；需要显式迁移，不提供兼容 fallback。
 
 ## Family 工作流
 
@@ -125,6 +128,7 @@ npm run ci
 - Publisher：`jiying2007`
 - Extension ID：`jiying2007.codex-change-safe`
 - Settings：`safeCodexChange.*`
+- Committed delivery policy：`.codex-change-safe.json` schema v1
 
 ## License
 
