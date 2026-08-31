@@ -1,0 +1,38 @@
+name: Repin Core 4.10.1 Once
+on:
+  push:
+    branches: [repin-safe-core-v4.10.1]
+    paths: [.github/workflows/_repin-core-v4.10.1-once.yml]
+permissions:
+  contents: write
+jobs:
+  repin:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: repin-safe-core-v4.10.1
+      - name: Repin exact released Core and prepare 5.1.2
+        shell: bash
+        env:
+          OLD_SHA: 57440a00030941020d5c3e9e01ced3c06062f42e
+          NEW_SHA: 76418b80533c644e3ab01045290cd3cdd355622c
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs'),cp=require('child_process');
+          const oldSha=process.env.OLD_SHA,newSha=process.env.NEW_SHA;
+          let out=''; try{out=cp.execFileSync('git',['grep','-lz',oldSha],{encoding:'utf8'});}catch(e){if(e.status!==1)throw e;}
+          for(const p of out.split('\0').filter(Boolean)){const b=fs.readFileSync(p);if(b.includes(0))continue;let s=b.toString('utf8').replaceAll(oldSha,newSha);s=s.replaceAll('Codex Safe Core 4.10.0','Codex Safe Core 4.10.1').replaceAll('Safe Core 4.10.0','Safe Core 4.10.1');fs.writeFileSync(p,s);}
+          const contract=JSON.parse(fs.readFileSync('product-contract.json','utf8'));contract.safeCoreVersion='4.10.1';contract.safeCoreCommit=newSha;contract.productVersion='5.1.2';fs.writeFileSync('product-contract.json',JSON.stringify(contract,null,2)+'\n');
+          const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));pkg.version='5.1.2';fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');
+          const lock=JSON.parse(fs.readFileSync('package-lock.json','utf8'));lock.version='5.1.2';if(lock.packages?.[''])lock.packages[''].version='5.1.2';fs.writeFileSync('package-lock.json',JSON.stringify(lock,null,2)+'\n');
+          if(fs.existsSync('CHANGELOG.md')){let s=fs.readFileSync('CHANGELOG.md','utf8');if(!/^## 5\.1\.2$/m.test(s))s=s.replace(/^# Changelog\s*/,'# Changelog\n\n## 5.1.2\n\n- repin the exact immutable Safe Core 4.10.1 release that fixes active Change Product Contract verification;\n- keep Safe Contract v2, Policy Schema v4, Change Receipt v1 and zero default model calls unchanged.\n\n');fs.writeFileSync('CHANGELOG.md',s);}
+          NODE
+          rm .github/workflows/_repin-core-v4.10.1-once.yml
+          git add -A
+          git update-index --add --cacheinfo 160000,$NEW_SHA,src/codex-safe-core
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m 'chore: pin Safe Core 4.10.1 and prepare 5.1.2'
+          git push origin HEAD:repin-safe-core-v4.10.1
