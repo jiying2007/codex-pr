@@ -1,0 +1,298 @@
+{
+  "name": "codex-change-safe",
+  "displayName": "Codex Change Safe",
+  "description": "GitHub Pull Request and GitLab Merge Request delivery orchestration with deterministic preflight, provenance and merge-readiness gates.",
+  "version": "5.0.0",
+  "publisher": "jiying2007",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "pull request",
+    "merge request",
+    "github",
+    "gitlab",
+    "delivery",
+    "codex",
+    "scm",
+    "safe"
+  ],
+  "activationEvents": [
+    "onCommand:safeCodexChange.preflight",
+    "onCommand:safeCodexChange.createOrUpdate",
+    "onCommand:safeCodexChange.refresh",
+    "onCommand:safeCodexChange.requestReviewers",
+    "onCommand:safeCodexChange.markReady",
+    "onCommand:safeCodexChange.enableAutoMerge",
+    "onCommand:safeCodexChange.enqueueMergeQueue",
+    "onCommand:safeCodexChange.open",
+    "onView:safeCodexChange.delivery"
+  ],
+  "main": "./extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "safeCodexChange.preflight",
+        "title": "Codex Change Safe: Delivery Preflight",
+        "category": "Codex Change Safe",
+        "icon": "$(pass)"
+      },
+      {
+        "command": "safeCodexChange.createOrUpdate",
+        "title": "Codex Change Safe: Create / Update PR or MR",
+        "category": "Codex Change Safe",
+        "icon": "$(git-pull-request-create)"
+      },
+      {
+        "command": "safeCodexChange.refresh",
+        "title": "Codex Change Safe: Refresh Merge Readiness",
+        "category": "Codex Change Safe",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "safeCodexChange.requestReviewers",
+        "title": "Codex Change Safe: Request Suggested Reviewers",
+        "category": "Codex Change Safe"
+      },
+      {
+        "command": "safeCodexChange.markReady",
+        "title": "Codex Change Safe: Mark Ready for Review",
+        "category": "Codex Change Safe"
+      },
+      {
+        "command": "safeCodexChange.enableAutoMerge",
+        "title": "Codex Change Safe: Enable Native Auto-Merge",
+        "category": "Codex Change Safe"
+      },
+      {
+        "command": "safeCodexChange.enqueueMergeQueue",
+        "title": "Codex Change Safe: Enqueue GitHub Merge Queue",
+        "category": "Codex Change Safe"
+      },
+      {
+        "command": "safeCodexChange.open",
+        "title": "Codex Change Safe: Open PR or MR",
+        "category": "Codex Change Safe"
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "safeCodexChange.preflight",
+          "when": "scmProvider == git && isWorkspaceTrusted",
+          "group": "navigation@8"
+        },
+        {
+          "command": "safeCodexChange.createOrUpdate",
+          "when": "scmProvider == git && isWorkspaceTrusted",
+          "group": "navigation@9"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "safeCodexChange.preflight",
+          "when": "view == safeCodexChange.delivery",
+          "group": "navigation@1"
+        },
+        {
+          "command": "safeCodexChange.createOrUpdate",
+          "when": "view == safeCodexChange.delivery",
+          "group": "navigation@2"
+        },
+        {
+          "command": "safeCodexChange.refresh",
+          "when": "view == safeCodexChange.delivery",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Codex Change Safe",
+      "properties": {
+        "safeCodexChange.provider": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "github",
+            "gitlab"
+          ],
+          "default": "auto",
+          "scope": "resource",
+          "description": "SCM provider. Custom hosts should be configured explicitly or matched by API base URL."
+        },
+        "safeCodexChange.targetBranch": {
+          "type": "string",
+          "default": "main",
+          "scope": "resource",
+          "description": "Target branch for the change request."
+        },
+        "safeCodexChange.remote": {
+          "type": "string",
+          "default": "origin",
+          "scope": "resource",
+          "description": "Git remote used for source and target synchronization checks."
+        },
+        "safeCodexChange.githubApiBaseUrl": {
+          "type": "string",
+          "default": "https://api.github.com",
+          "scope": "resource",
+          "description": "GitHub REST/GraphQL API base. For GHES use https://HOST/api/v3."
+        },
+        "safeCodexChange.githubTokenEnv": {
+          "type": "string",
+          "default": "GITHUB_TOKEN",
+          "scope": "machine",
+          "description": "Environment variable containing the GitHub token. The token value is never stored in VS Code settings."
+        },
+        "safeCodexChange.gitlabApiBaseUrl": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "GitLab API v4 base. Empty derives https://REMOTE_HOST/api/v4."
+        },
+        "safeCodexChange.gitlabTokenEnv": {
+          "type": "string",
+          "default": "GITLAB_TOKEN",
+          "scope": "machine",
+          "description": "Environment variable containing the GitLab token. The token value is never stored in VS Code settings."
+        },
+        "safeCodexChange.allowInsecureHttp": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "description": "Allow plain HTTP only for explicitly configured trusted internal GitLab/GHES instances. Prefer HTTPS and NODE_EXTRA_CA_CERTS."
+        },
+        "safeCodexChange.requestTimeoutSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 3,
+          "maximum": 120,
+          "scope": "application"
+        },
+        "safeCodexChange.requireCleanWorktree": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource"
+        },
+        "safeCodexChange.requirePushedHead": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource"
+        },
+        "safeCodexChange.requireFreshTarget": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource"
+        },
+        "safeCodexChange.createAsDraft": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource"
+        },
+        "safeCodexChange.requiredChecks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource"
+        },
+        "safeCodexChange.requiredApprovals": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 20,
+          "scope": "resource"
+        },
+        "safeCodexChange.labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource"
+        },
+        "safeCodexChange.reviewers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "description": "Additional reviewer usernames. CODEOWNERS-derived reviewers are added deterministically."
+        },
+        "safeCodexChange.managedSections": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource"
+        },
+        "safeCodexChange.includeReceipt": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource"
+        },
+        "safeCodexChange.provenancePolicy": {
+          "type": "string",
+          "enum": [
+            "advisory",
+            "require-review",
+            "require-commit",
+            "require-all"
+          ],
+          "default": "advisory",
+          "scope": "resource",
+          "description": "How Review Receipt v4 and Commit Receipt v4 coverage participates in Delivery Preflight."
+        },
+        "safeCodexChange.blockOnReviewFindings": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "description": "Block delivery when matching Codex Review Safe range evidence reports blocking findings."
+        }
+      }
+    },
+    "views": {
+      "scm": [
+        {
+          "id": "safeCodexChange.delivery",
+          "name": "Codex Change Safe",
+          "when": "isWorkspaceTrusted"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "check": "node scripts/check-syntax.js",
+    "test": "node --test test/*.test.js",
+    "ci": "npm run check && npm run verify:manifest && npm run verify:actions && npm test",
+    "verify:manifest": "node scripts/verify-manifest.js",
+    "verify:actions": "node scripts/verify-actions-pins.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jiying2007/codex-pr.git"
+  },
+  "homepage": "https://github.com/jiying2007/codex-pr#readme",
+  "bugs": {
+    "url": "https://github.com/jiying2007/codex-pr/issues"
+  },
+  "pricing": "Free",
+  "preview": false
+}

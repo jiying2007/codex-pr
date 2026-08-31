@@ -1,28 +1,61 @@
-# Codex PR Safe — Retired
+# Codex Change Safe
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+English | [简体中文](README.zh-CN.md)
 
-This repository is retired and is no longer an active Codex Safe product.
+**Codex Change Safe** is a developer-side GitHub Pull Request / GitLab Merge Request **delivery orchestrator**. It replaces the retired PR-narrative generator with deterministic delivery preflight, cross-family provenance validation, PR/MR lifecycle operations, and merge-readiness gating.
 
-The former VS Code extension generated Pull Request titles/descriptions from committed `base...HEAD` changes and integrated with GitHub Pull Requests. In the current product architecture this is not a sufficiently independent responsibility, and it duplicates work already performed elsewhere in the development/review flow.
+The repository remains `jiying2007/codex-pr`, but v5 is a hard-cut product. The retired `safeCodexPr.*` surface, GitHub Compare workflow, copy/paste-first UX, and GitHub-only assumptions are not compatibility contracts.
 
-## Current product boundary
+## Workflow
 
-The active family is intentionally narrower:
+```text
+Codex Review Safe → Review Receipt v4
+        ↓
+Codex Commit Safe → Commit Receipt v4
+        ↓
+manual commit / push
+        ↓
+Codex Change Safe
+  ├─ Delivery Preflight
+  ├─ provenance validation
+  ├─ deterministic Change Manifest
+  ├─ GitHub PR / GitLab MR create/update
+  ├─ CODEOWNERS reviewer routing
+  ├─ CI / approval / conflict readiness
+  ├─ Change Receipt v1
+  └─ native auto-merge / GitHub merge queue
+```
 
-- [`codex-safe-core`](https://github.com/jiying2007/codex-safe-core) — shared safety/runtime/evidence primitives.
-- [`codex-review`](https://github.com/jiying2007/codex-review) — developer-side pre-commit review.
-- [`codex-commit`](https://github.com/jiying2007/codex-commit) — developer-side commit-message generation.
-- [`codex-review-service`](https://github.com/jiying2007/codex-review-service) — server-side GitLab Self-Managed Merge Request review, publication, gate and audit.
+Change Safe does not duplicate the server-side webhook, durable review queue, finding publication, notification, or audit responsibilities of Codex Review Service.
 
-No replacement PR/MR-description generator is planned. `codex-commit` intentionally does **not** generate PR/MR descriptions. PR/MR creation and metadata management belong to the SCM's native UI/CLI/API.
+## Token contract
 
-## Retirement policy
+v5 performs **zero additional model calls by default**. It composes committed Git metadata, SCM state, Review Receipt v4 and Commit Receipt v4 into managed PR/MR sections. It never re-sends the full change range to Codex merely to rewrite a narrative.
 
-- No new features, bug fixes, releases or Marketplace publication.
-- No compatibility shim and no successor VS Code extension.
-- Historical commits/tags/releases remain only as historical artifacts; they are not part of the active family contract.
-- Do not copy the former GitHub-specific provider, compare-URL or fork-topology logic into `codex-safe-core`.
-- Shared semantic-context and efficiency primitives already live in `codex-safe-core`; there is no duplicate migration required from this repository.
+Managed sections are delimited by `<!-- codex-change-safe:* -->`, so updates preserve human-authored PR/MR prose.
 
-See [`RETIRED.md`](RETIRED.md) for the architectural decision and migration guidance.
+## Platforms
+
+- GitHub.com and GitHub Enterprise Server
+- GitLab.com and GitLab Self-Managed
+- GitLab Self-Managed minimum: 14.6.1
+- GitHub native required-check discovery when branch protection is readable
+- GitLab pipeline/job state and approval rules when the instance/license exposes them
+- GitHub native auto-merge and merge queue; GitLab native auto-merge
+
+## Safety
+
+Remote writes always require explicit modal confirmation. Tokens are read only from environment variables. The configured API host is bound to the Git remote host to prevent credential exfiltration. Plain HTTP is refused by default; use HTTPS and `NODE_EXTRA_CA_CERTS` for internal CAs.
+
+See [Architecture](docs/ARCHITECTURE.md), [Workflow](docs/WORKFLOW.md), [GitLab Self-Managed](docs/GITLAB_SELF_MANAGED.md), [Token Efficiency](docs/TOKEN_EFFICIENCY.md), [Migration](MIGRATION.md), and [Security](SECURITY.md).
+
+## Development
+
+```bash
+npm ci --ignore-scripts --no-audit --no-fund
+npm run ci
+```
+
+## License
+
+MIT
