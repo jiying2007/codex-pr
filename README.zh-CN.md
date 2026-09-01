@@ -135,3 +135,7 @@ npm run ci
 ## License
 
 MIT
+
+## Provider Contract v2 产品族对齐
+
+Codex Change Safe 5.3.0 固定到 Core 4.12.0，并在 Product Contract 中记录 Runtime/Provider Contract v2 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
