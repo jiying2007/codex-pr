@@ -105,3 +105,14 @@ jobs:
           else gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${TAG}" -f sha="$GITHUB_SHA" >/dev/null; fi
           gh release view "$TAG" >/dev/null 2>&1 && { echo "release already exists" >&2; exit 1; } || true
           gh release create "$TAG" codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS --title "Codex Change Safe ${{ needs.validate.outputs.version }}" --generate-notes --verify-tag
+          immutable=false
+          for attempt in {1..12}; do
+            immutable=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.immutable')
+            [[ "$immutable" == true ]] && break
+            sleep 5
+          done
+          test "$immutable" = true
+          gh release verify "$TAG"
+          for asset in codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS; do
+            gh release verify-asset "$TAG" "$asset"
+          done
