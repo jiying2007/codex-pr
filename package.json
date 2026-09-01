@@ -2,7 +2,7 @@
   "name": "codex-change-safe",
   "displayName": "Codex Change Safe",
   "description": "GitHub Pull Request and GitLab Merge Request delivery authorization with committed policy, provenance, provider-native merge gates and zero default model calls.",
-  "version": "5.1.3",
+  "version": "5.2.0",
   "publisher": "jiying2007",
   "license": "MIT",
   "engines": {
@@ -265,7 +265,7 @@
           ],
           "default": "advisory",
           "scope": "resource",
-          "description": "How Review Receipt v4 and Commit Receipt v4 coverage participates in Delivery Preflight."
+          "description": "How Review Receipt v5 and Commit Receipt v4 coverage participates in Delivery Preflight."
         },
         "safeCodexChange.blockOnReviewFindings": {
           "type": "boolean",

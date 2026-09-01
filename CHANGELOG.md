@@ -1,3 +1,10 @@
+## 5.2.0
+
+- Adopt immutable Safe Core 4.11.0 and Review Receipt v5 qualification semantics.
+- Make require-review/require-all depend on Review coverage, mechanical and quality gates rather than the Review-only needs_evidence readiness state.
+- Keep blocked/incomplete/mechanical-fail Review evidence fail closed while Change retains merge-readiness authority.
+- Verify immutable GitHub Release provenance and every VSIX/SBOM/checksum asset inside the release workflow.
+
 # Changelog
 
 ## 5.1.3

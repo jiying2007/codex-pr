@@ -1,27 +1,32 @@
 'use strict';
 
+const { reviewReceiptQualifiesForDelivery } = require('./codex-safe-core/judgment-lifecycle');
+
 const REVIEW_EXTENSION_ID = 'jiying2007.codex-review-safe';
 const COMMIT_EXTENSION_ID = 'jiying2007.codex-commit-safe';
 const REVIEW_API_CONTRACT = 2;
 const COMMIT_API_CONTRACT = 1;
 
 function emptyReview(status = 'unavailable') {
-  return Object.freeze({ status, totalCommits: 0, reviewedCommits: 0, blockedCommits: 0, matches: [] });
+  return Object.freeze({ status, totalCommits: 0, reviewedCommits: 0, blockedCommits: 0, qualifiedCommits: 0, matches: [] });
 }
 function emptyCommit(status = 'unavailable') {
   return Object.freeze({ status, totalCommits: 0, generatedCommits: 0, reviewedGeneratedCommits: 0, matches: [] });
 }
 function normalizeReviewEvidence(value) {
   if (!value || value.kind !== 'codex-review-range-evidence' || !Array.isArray(value.matches)) return emptyReview('invalid');
-  const matches = value.matches.filter(item => typeof item?.commitOid === 'string' && item.commitOid);
+  const matches = value.matches.filter(item => typeof item?.commitOid === 'string' && item.commitOid && item.receipt);
+  const qualifiedCommits = matches.filter(item => reviewReceiptQualifiesForDelivery(item.receipt)).length;
   return Object.freeze({
     status: 'available',
     schemaVersion: value.schemaVersion,
     totalCommits: Number(value.totalCommits) || 0,
     reviewedCommits: Number(value.reviewedCommits ?? matches.length) || 0,
-    blockedCommits: Number(value.blockedCommits) || 0,
-    incompleteCommits: Number(value.incompleteCommits) || 0,
-    needsEvidenceCommits: Number(value.needsEvidenceCommits) || 0,
+    blockedCommits: matches.filter(item => item.receipt.qualityVerdict === 'blocked').length,
+    incompleteCommits: matches.filter(item => item.receipt.coverageVerdict !== 'complete').length,
+    mechanicalFailureCommits: matches.filter(item => item.receipt.mechanicalGate === 'fail').length,
+    qualifiedCommits,
+    unqualifiedCommits: Math.max(0, (Number(value.totalCommits) || 0) - qualifiedCommits),
     matches
   });
 }
@@ -61,16 +66,18 @@ async function collectProvenance(vscode, repoRoot, baseRef, headRef = 'HEAD', to
     commit = emptyCommit('error');
   }
   const totalCommits = Math.max(review.totalCommits || 0, commit.totalCommits || 0);
-  const complete = totalCommits > 0 && review.status === 'available' && commit.status === 'available' && review.reviewedCommits === totalCommits && review.blockedCommits === 0 && review.incompleteCommits === 0 && review.needsEvidenceCommits === 0 && commit.generatedCommits === totalCommits;
+  const complete = totalCommits > 0 && review.status === 'available' && commit.status === 'available' && review.reviewedCommits === totalCommits && review.qualifiedCommits === totalCommits && commit.generatedCommits === totalCommits;
   return Object.freeze({
     complete,
     totalCommits,
     reviewReceipts: review.reviewedCommits,
+    qualifiedReviewReceipts: review.qualifiedCommits,
     commitReceipts: commit.generatedCommits,
     reviewedGeneratedCommits: commit.reviewedGeneratedCommits,
-    blockedReviewCommits: review.blockedCommits,
+    blockedReviewCommits: review.blockedCommits || 0,
     incompleteReviewCommits: review.incompleteCommits || 0,
-    needsEvidenceReviewCommits: review.needsEvidenceCommits || 0,
+    mechanicalFailureReviewCommits: review.mechanicalFailureCommits || 0,
+    needsEvidenceReviewCommits: review.unqualifiedCommits || 0,
     reviewStatus: review.status,
     commitStatus: commit.status,
     review,
