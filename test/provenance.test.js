@@ -1,12 +1,42 @@
 'use strict';
 const test = require('node:test'); const assert = require('node:assert/strict');
 const { normalizeReviewEvidence, normalizeCommitEvidence } = require('../src/provenance');
-test('normalizes current family range evidence without guessing receipt internals', () => {
-  const review = normalizeReviewEvidence({kind:'codex-review-range-evidence',schemaVersion:4,totalCommits:3,reviewedCommits:2,blockedCommits:1,incompleteCommits:1,needsEvidenceCommits:1,matches:[{commitOid:'a',receipt:{}},{commitOid:'b',receipt:{}}]});
-  assert.equal(review.blockedCommits,1); assert.equal(review.incompleteCommits,1); assert.equal(review.reviewedCommits,2);
-  const commit = normalizeCommitEvidence({kind:'codex-commit-range-evidence',schemaVersion:4,totalCommits:3,generatedCommits:2,reviewedGeneratedCommits:2,matches:[{commitOid:'a',receipt:{}},{commitOid:'b',receipt:{}}]}); assert.equal(commit.generatedCommits,2);
+
+function receipt(overrides={}) { return { coverageVerdict:'complete', mechanicalGate:'pass', qualityVerdict:'no_findings', readinessVerdict:'needs_evidence', ...overrides }; }
+
+test('review provenance qualification is based on quality coverage and mechanical gates', () => {
+  const review = normalizeReviewEvidence({kind:'codex-review-range-evidence',schemaVersion:5,totalCommits:3,reviewedCommits:3,matches:[
+    {commitOid:'a',receipt:receipt()},
+    {commitOid:'b',receipt:receipt({qualityVerdict:'findings_open'})},
+    {commitOid:'c',receipt:receipt({coverageVerdict:'incomplete'})}
+  ]});
+  assert.equal(review.reviewedCommits,3);
+  assert.equal(review.qualifiedCommits,2);
+  assert.equal(review.incompleteCommits,1);
+  assert.equal(review.unqualifiedCommits,1);
+  assert.equal(review.blockedCommits,0);
 });
 
+test('needs_evidence readiness does not make an otherwise clean review unqualified', () => {
+  const review = normalizeReviewEvidence({kind:'codex-review-range-evidence',schemaVersion:5,totalCommits:1,reviewedCommits:1,matches:[{commitOid:'a',receipt:receipt({readinessVerdict:'needs_evidence'})}]});
+  assert.equal(review.qualifiedCommits,1);
+  assert.equal(review.unqualifiedCommits,0);
+});
+
+test('blocked quality and mechanical failures fail closed', () => {
+  const review = normalizeReviewEvidence({kind:'codex-review-range-evidence',schemaVersion:5,totalCommits:2,reviewedCommits:2,matches:[
+    {commitOid:'a',receipt:receipt({qualityVerdict:'blocked'})},
+    {commitOid:'b',receipt:receipt({mechanicalGate:'fail'})}
+  ]});
+  assert.equal(review.qualifiedCommits,0);
+  assert.equal(review.blockedCommits,1);
+  assert.equal(review.mechanicalFailureCommits,1);
+});
+
+test('normalizes commit range evidence', () => {
+  const commit = normalizeCommitEvidence({kind:'codex-commit-range-evidence',schemaVersion:4,totalCommits:3,generatedCommits:2,reviewedGeneratedCommits:2,matches:[{commitOid:'a',receipt:{}},{commitOid:'b',receipt:{}}]});
+  assert.equal(commit.generatedCommits,2);
+});
 
 test('provenance public API contracts fail closed when an installed extension is too old', async () => {
   const { collectProvenance } = require('../src/provenance');
