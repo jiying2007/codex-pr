@@ -2,11 +2,11 @@
   "productContractVersion": 1,
   "productId": "codex-change-safe",
   "product": "Codex Change Safe",
-  "productVersion": "5.1.3",
+  "productVersion": "5.2.0",
   "extensionId": "jiying2007.codex-change-safe",
   "settingsNamespace": "safeCodexChange",
-  "safeCoreVersion": "4.10.2",
-  "safeCoreCommit": "cd9788f1280a217fbe6d0beb59682a85a8b82c4d",
+  "safeCoreVersion": "4.11.0",
+  "safeCoreCommit": "8375907712db37492aff1ac0d0013e2753b1f6ab",
   "safeCoreMajorVersion": 4,
   "safeContractVersion": 2,
   "policySchemaVersion": 4,
@@ -17,7 +17,7 @@
     24
   ],
   "changeReceiptSchema": 1,
-  "reviewReceiptSchemaConsumed": 4,
+  "reviewReceiptSchemaConsumed": 5,
   "commitReceiptSchemaConsumed": 4,
   "reviewExtensionApiContractConsumed": 2,
   "commitExtensionApiContractConsumed": 1,
@@ -31,5 +31,6 @@
     "gitlab"
   ],
   "defaultModelCalls": 0,
-  "remoteWritesRequireConfirmation": true
+  "remoteWritesRequireConfirmation": true,
+  "judgmentLifecycleVersionConsumed": 1
 }
