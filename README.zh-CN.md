@@ -16,7 +16,7 @@
 - GitHub 使用 `GITHUB_TOKEN`，GitLab 使用 `GITLAB_TOKEN`，并通过 Extension Host 环境变量提供
 - 当仓库 Policy 要求 provenance 时，需要 Codex Review Safe / Codex Commit Safe
 
-Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace Extension Host 所在环境提供 SCM Token。GitLab Self-Managed 或 GHES 只有在自动发现不足时才需要显式配置对应 API Endpoint。
+Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace Extension Host 所在环境提供 SCM Token。GitLab Self-Managed 或 GHES 只有在自动发现不足时才需要显式配置对应 API Endpoint。对于隔离可信的 HTTP + 私有 IP GitLab，在 machine scope 设置 `safeCodexChange.allowInsecureHttp=true`；SSH/IP remote 会无凭据先探测 HTTPS、再探测 HTTP，Delivery Preflight 仍会明确提示 PAT/API payload 在局域网上是明文链路。
 
 ### 第一次成功交付
 
@@ -33,7 +33,7 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 - Change 阶段默认模型调用为 `0`；title/body/risk/evidence 由 Git、Receipt 与 SCM state 确定性生成。
 - 所有远端 mutation 都统一经过最新 Delivery Authorization Gate，并重新验证当前交付证据。
-- 仓库策略唯一入口是 Safe Core 4.12.4 的 committed `.codex-safe.json` **Policy Schema v4**。
+- 仓库策略唯一入口是 Safe Core 4.12.5 的 committed `.codex-safe.json` **Policy Schema v4**。
 - Change Safe 直接消费 Core 的 parser、闭合字段/类型校验与 Policy fingerprint，不维护第二套 Repository Policy Schema。
 - 本地 Change settings 只能加严 committed `change` rules；Provider 原生要求与之取并集，本地不能削弱。
 - GitHub/GitLab 使用各自的 provider-specific merge-state classifier；未知状态一律进入 `WAITING`。
@@ -53,7 +53,7 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/4c746614a1a4a5b6ea166ab6ded32f1319cf44c3/codex-safe.schema.json",
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/550160859a953d1c3d916a463435e3152248d18d/codex-safe.schema.json",
   "schemaVersion": 4,
   "review": {},
   "commit": {},
@@ -129,7 +129,7 @@ npm run ci
 - Publisher：`jiying2007`
 - Extension ID：`jiying2007.codex-change-safe`
 - Settings：`safeCodexChange.*`
-- Safe Core：`4.12.4` 精确 pin `4c746614a1a4a5b6ea166ab6ded32f1319cf44c3`
+- Safe Core：`4.12.5` 精确 pin `550160859a953d1c3d916a463435e3152248d18d`
 - Repository Policy：`.codex-safe.json` / Policy Schema v4
 
 ## License
@@ -138,4 +138,4 @@ MIT
 
 ## Provider Contract v2 产品族对齐
 
-Codex Change Safe 5.3.1 固定到 Core 4.12.4，并在 Product Contract 中记录 Runtime/Provider Contract v2 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
+Codex Change Safe 5.4.0 固定到 Core 4.12.5，并在 Product Contract 中记录 Runtime/Provider Contract v2 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。

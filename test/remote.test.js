@@ -1,9 +1,5 @@
 'use strict';
-const test = require('node:test'); const assert = require('node:assert/strict');
-const { parseRemote, detectProvider } = require('../src/remote');
-test('parses GitHub SSH and GitLab nested project remotes', () => {
-  const gh = parseRemote('git@github.com:jiying2007/codex-pr.git'); assert.equal(gh.host, 'github.com'); assert.equal(gh.projectPath, 'jiying2007/codex-pr'); assert.equal(detectProvider(gh, {}), 'github');
-  const gl = parseRemote('ssh://git@gitlab.example.local/group/sub/project.git'); assert.equal(gl.projectPath, 'group/sub/project'); assert.equal(detectProvider(gl, { provider: 'gitlab' }), 'gitlab');
-});
-test('custom host fails closed without explicit provider', () => { const r = parseRemote('git@scm.example.local:team/repo.git'); assert.throws(() => detectProvider(r, {}), { code: 'EPROVIDERUNKNOWN' }); });
-test('custom provider can be inferred from configured API host', () => { const r = parseRemote('git@scm.example.local:team/repo.git'); assert.equal(detectProvider(r, { gitlabApiBaseUrl: 'https://scm.example.local/api/v4' }), 'gitlab'); });
+const test=require('node:test'),assert=require('node:assert/strict');const{parseRemote,detectProvider}=require('../src/remote');
+test('parses cloud SSH nested GitLab and custom HTTPS ports',()=>{const gh=parseRemote('git@github.com:jiying2007/codex-pr.git');assert.equal(detectProvider(gh,{}),'github');const gl=parseRemote('ssh://git@gitlab.example.local/group/sub/project.git');assert.equal(gl.projectPath,'group/sub/project');assert.equal(detectProvider(gl,{provider:'gitlab'}),'gitlab');const port=parseRemote('https://gitlab.local:8443/group/repo.git');assert.equal(port.port,'8443');assert.equal(port.webOrigin,'https://gitlab.local:8443');});
+test('custom host requires async discovery or explicit provider',()=>{const r=parseRemote('git@scm.example.local:team/repo.git');assert.throws(()=>detectProvider(r,{}),{code:'EPROVIDERUNKNOWN'});assert.equal(detectProvider(r,{gitlabApiBaseUrl:'https://scm.example.local/api/v4'}),'gitlab');});
+test('ambiguous and well-known mismatched providers fail closed',()=>{const r=parseRemote('git@scm.example.local:team/repo.git');assert.throws(()=>detectProvider(r,{githubApiBaseUrl:'https://scm.example.local/api/v3',gitlabApiBaseUrl:'https://scm.example.local/api/v4'}),{code:'EPROVIDERAMBIGUOUS'});assert.throws(()=>detectProvider(parseRemote('git@github.com:o/r.git'),{provider:'gitlab'}),{code:'EPROVIDERMISMATCH'});});

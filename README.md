@@ -16,7 +16,7 @@ Requirements:
 - `GITHUB_TOKEN` for GitHub or `GITLAB_TOKEN` for GitLab in the Extension Host environment
 - Codex Review Safe / Codex Commit Safe when repository policy requires their provenance
 
-For Remote SSH, Dev Containers, Codespaces or WSL, provide the SCM token where the workspace Extension Host runs. For GitLab Self-Managed or GHES, configure the matching API endpoint only when automatic discovery is insufficient.
+For Remote SSH, Dev Containers, Codespaces or WSL, provide the SCM token where the workspace Extension Host runs. For GitLab Self-Managed or GHES, configure the matching API endpoint only when automatic discovery is insufficient. For an isolated HTTP + private-IP GitLab, set machine-scoped `safeCodexChange.allowInsecureHttp=true`; SSH/IP remotes then probe HTTPS first and HTTP second without credentials. Delivery Preflight still warns that the PAT/API payloads are plaintext on the LAN.
 
 ### First successful delivery
 
@@ -33,7 +33,7 @@ See [Workflow](docs/WORKFLOW.md) and [GitLab Self-Managed](docs/GITLAB_SELF_MANA
 
 - Change-stage model calls are `0` by default; title/body/risk/evidence are deterministic from Git, receipts and SCM state.
 - Every remote mutation revalidates fresh delivery evidence through one Delivery Authorization Gate.
-- The only repository policy is committed `.codex-safe.json` **Policy Schema v4** from Safe Core 4.12.4.
+- The only repository policy is committed `.codex-safe.json` **Policy Schema v4** from Safe Core 4.12.5.
 - Change Safe consumes Core parsing, closed validation and policy fingerprinting; it does not own a parallel policy schema.
 - Local Change settings can only tighten committed `change` rules; provider-native requirements are unioned and cannot be weakened locally.
 - GitHub/GitLab merge states are provider-specific and fail closed; unknown states become `WAITING`.
@@ -53,7 +53,7 @@ Use the Family-wide committed `.codex-safe.json` with `schemaVersion: 4`:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/4c746614a1a4a5b6ea166ab6ded32f1319cf44c3/codex-safe.schema.json",
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/550160859a953d1c3d916a463435e3152248d18d/codex-safe.schema.json",
   "schemaVersion": 4,
   "review": {},
   "commit": {},
@@ -129,7 +129,7 @@ npm run ci
 - Publisher: `jiying2007`
 - Extension ID: `jiying2007.codex-change-safe`
 - Settings: `safeCodexChange.*`
-- Safe Core: `4.12.4` exact pin `4c746614a1a4a5b6ea166ab6ded32f1319cf44c3`
+- Safe Core: `4.12.5` exact pin `550160859a953d1c3d916a463435e3152248d18d`
 - Repository Policy: `.codex-safe.json` / Policy Schema v4
 
 ## License
@@ -138,4 +138,4 @@ MIT
 
 ## Provider Contract v2 family alignment
 
-Codex Change Safe 5.3.1 pins Core 4.12.4 and records Runtime/Provider Contract v2 consumption for Family compatibility. Change Safe still performs zero model calls by default and therefore does not expose model relay credentials or an auth.json setting of its own; Review, Commit, Diagnose and Review Service own those model-runtime controls. Change Safe's existing `allowInsecureHttp` remains scoped only to explicitly trusted GitHub/GitLab SCM APIs.
+Codex Change Safe 5.4.0 pins Core 4.12.5 and records Runtime/Provider Contract v2 consumption for Family compatibility. Change Safe still performs zero model calls by default and therefore does not expose model relay credentials or an auth.json setting of its own; Review, Commit, Diagnose and Review Service own those model-runtime controls. Change Safe's existing `allowInsecureHttp` remains scoped only to explicitly trusted GitHub/GitLab SCM APIs.

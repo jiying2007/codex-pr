@@ -12,7 +12,7 @@ function array(value){return Array.isArray(value)?value:[];}
 function unique(values){return[...new Set(values)];}
 function provenanceValue(value){return PROVENANCE.get(String(value||'advisory'))||PROVENANCE.get('advisory');}
 function provenanceName(value){if(value.review&&value.commit)return'require-all';if(value.review)return'require-review';if(value.commit)return'require-commit';return'advisory';}
-function tightenBoolean(localValue,committedValue,fallback=true){const local=localValue===undefined?fallback:localValue;const committed=committedValue===undefined?fallback:committedValue;return Boolean(local||committed);}
+function tightenBoolean(localValue,committedValue,fallback=true){const local=localValue===undefined?fallback:Boolean(localValue);if(committedValue===undefined)return local;return Boolean(local||committedValue);}
 function mergePolicy(local,committed){
   const lp=provenanceValue(local.provenancePolicy),cp=provenanceValue(committed.provenancePolicy);
   const mergedProv={review:lp.review||cp.review,commit:lp.commit||cp.commit};
@@ -45,4 +45,4 @@ async function resolveEffectiveConfig(git,localConfig,targetRef){
   if(result.source==='head-policy'){committed.__present=true;committed.__fingerprint=result.fingerprint;}
   return mergePolicy(localConfig,committed);
 }
-module.exports={POLICY_FILE,POLICY_SCHEMA_VERSION,mergePolicy,resolveEffectiveConfig,provenanceValue,provenanceName};
+module.exports={POLICY_FILE,POLICY_SCHEMA_VERSION,mergePolicy,resolveEffectiveConfig,provenanceValue,provenanceName,tightenBoolean};
