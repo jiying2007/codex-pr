@@ -33,7 +33,7 @@ See [Workflow](docs/WORKFLOW.md) and [GitLab Self-Managed](docs/GITLAB_SELF_MANA
 
 - Change-stage model calls are `0` by default; title/body/risk/evidence are deterministic from Git, receipts and SCM state.
 - Every remote mutation revalidates fresh delivery evidence through one Delivery Authorization Gate.
-- The only repository policy is committed `.codex-safe.json` **Policy Schema v4** from Safe Core 4.10.2.
+- The only repository policy is committed `.codex-safe.json` **Policy Schema v4** from Safe Core 4.12.4.
 - Change Safe consumes Core parsing, closed validation and policy fingerprinting; it does not own a parallel policy schema.
 - Local Change settings can only tighten committed `change` rules; provider-native requirements are unioned and cannot be weakened locally.
 - GitHub/GitLab merge states are provider-specific and fail closed; unknown states become `WAITING`.
@@ -53,7 +53,7 @@ Use the Family-wide committed `.codex-safe.json` with `schemaVersion: 4`:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/cd9788f1280a217fbe6d0beb59682a85a8b82c4d/codex-safe.schema.json",
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/4c746614a1a4a5b6ea166ab6ded32f1319cf44c3/codex-safe.schema.json",
   "schemaVersion": 4,
   "review": {},
   "commit": {},
@@ -78,7 +78,7 @@ Policy Schema v4 is a hard cut. Schema v3 and parallel `.codex-change-safe.json`
 ```text
 staged changes
     ↓
-Codex Review Safe → Review Receipt v4
+Codex Review Safe → Review Receipt v5
     ↓
 Codex Commit Safe → Commit Receipt v4
     ↓
@@ -129,7 +129,7 @@ npm run ci
 - Publisher: `jiying2007`
 - Extension ID: `jiying2007.codex-change-safe`
 - Settings: `safeCodexChange.*`
-- Safe Core: `4.10.0` exact pin `cd9788f1280a217fbe6d0beb59682a85a8b82c4d`
+- Safe Core: `4.12.4` exact pin `4c746614a1a4a5b6ea166ab6ded32f1319cf44c3`
 - Repository Policy: `.codex-safe.json` / Policy Schema v4
 
 ## License
@@ -138,4 +138,4 @@ MIT
 
 ## Provider Contract v2 family alignment
 
-Codex Change Safe 5.3.0 pins Core 4.12.0 and records Runtime/Provider Contract v2 consumption for Family compatibility. Change Safe still performs zero model calls by default and therefore does not expose model relay credentials or an auth.json setting of its own; Review, Commit, Diagnose and Review Service own those model-runtime controls. Change Safe's existing `allowInsecureHttp` remains scoped only to explicitly trusted GitHub/GitLab SCM APIs.
+Codex Change Safe 5.3.1 pins Core 4.12.4 and records Runtime/Provider Contract v2 consumption for Family compatibility. Change Safe still performs zero model calls by default and therefore does not expose model relay credentials or an auth.json setting of its own; Review, Commit, Diagnose and Review Service own those model-runtime controls. Change Safe's existing `allowInsecureHttp` remains scoped only to explicitly trusted GitHub/GitLab SCM APIs.
