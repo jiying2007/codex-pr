@@ -1,15 +1,29 @@
+# Changelog
+
+## 5.4.0 - 2026-09-02
+
+- Make self-managed GitLab/GHES first-class: credential-free same-host provider discovery, custom ports/relative URL roots, explicit trusted API host aliases, and Doctor diagnostics that work even before provider resolution.
+- Support the common SSH-remote + HTTP/private-IP GitLab topology after explicit `allowInsecureHttp` opt-in: probe HTTPS first, fall back to credential-free HTTP discovery, prefer HTTPS when both work, and recognize allowlisted GitLab health probes when the provider is explicit.
+- Harden plaintext transport: public IP literals are rejected for HTTP credential delivery, HTTPS remotes cannot downgrade API transport to HTTP, different HTTP(S) source/target origins are treated as different SCM instances, and Preflight visibly warns when tokens traverse plaintext HTTP.
+- Harden delivery correctness: NUL-safe Git path parsing, provider-specific CODEOWNERS semantics, explicit SCM/TLS/auth/network error classes, legacy GitLab merge states, and pre/post mutation HEAD binding.
+- Fix policy boolean merging so local explicit false is honored unless committed repository policy explicitly tightens it. Surface partial remote warnings instead of silently hiding them.
+- Repin Codex Safe Core 4.12.5 and use its local/IANA user-visible timestamp formatter for Output Channel logs while receipts remain canonical UTC.
+- Repair current-state documentation identity and restore chronological changelog ordering.
+
+## 5.3.1 - 2026-09-02
+
+- Release-only patch carrying the exact Codex Safe Core 4.12.4 family pin and validated delivery contracts; no Change Safe runtime or delivery semantics change.
+
+## 5.3.0 - 2026-09-01
+
+- Align Change Safe with Codex Safe Core 4.12 Provider Contract v2 while keeping zero default model calls and deterministic delivery authorization.
+
 ## 5.2.0
 
 - Adopt immutable Safe Core 4.11.0 and Review Receipt v5 qualification semantics.
 - Make require-review/require-all depend on Review coverage, mechanical and quality gates rather than the Review-only needs_evidence readiness state.
 - Keep blocked/incomplete/mechanical-fail Review evidence fail closed while Change retains merge-readiness authority.
 - Verify immutable GitHub Release provenance and every VSIX/SBOM/checksum asset inside the release workflow.
-
-# Changelog
-
-## 5.3.1 - 2026-09-02
-
-- Release-only patch carrying the exact Codex Safe Core 4.12.4 family pin and validated delivery contracts; no Change Safe runtime or delivery semantics change.
 
 ## 5.1.3
 

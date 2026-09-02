@@ -2,7 +2,7 @@
   "name": "codex-change-safe",
   "displayName": "Codex Change Safe",
   "description": "GitHub Pull Request and GitLab Merge Request delivery authorization with committed policy, provenance, provider-native merge gates and zero default model calls.",
-  "version": "5.3.1",
+  "version": "5.4.0",
   "publisher": "jiying2007",
   "license": "MIT",
   "engines": {
@@ -148,7 +148,7 @@
           ],
           "default": "auto",
           "scope": "resource",
-          "description": "SCM provider. Custom hosts should be configured explicitly or matched by API base URL."
+          "description": "SCM provider. auto recognizes cloud hosts and performs a credential-free same-host probe for self-managed instances; SSH/custom hosts probe HTTPS first and, only after explicit allowInsecureHttp opt-in, private-LAN HTTP."
         },
         "safeCodexChange.targetBranch": {
           "type": "string",
@@ -160,7 +160,7 @@
           "type": "string",
           "default": "https://api.github.com",
           "scope": "resource",
-          "description": "GitHub REST/GraphQL API base. For GHES use https://HOST/api/v3."
+          "description": "GitHub REST API base. GitHub.com uses api.github.com; GHES values must end with /api/v3 and may include a relative URL root."
         },
         "safeCodexChange.githubTokenEnv": {
           "type": "string",
@@ -172,7 +172,7 @@
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "GitLab API v4 base. Empty derives https://REMOTE_HOST/api/v4."
+          "description": "GitLab API v4 base. Empty derives a same-host endpoint; explicit values must end with /api/v4 and support custom ports/relative URL roots."
         },
         "safeCodexChange.gitlabTokenEnv": {
           "type": "string",
@@ -184,7 +184,7 @@
           "type": "boolean",
           "default": false,
           "scope": "machine",
-          "description": "Allow plain HTTP only for explicitly configured trusted internal GitLab/GHES instances. Prefer HTTPS and NODE_EXTRA_CA_CERTS."
+          "description": "Allow plaintext HTTP only for explicitly trusted internal SCM. For private IP literals, SSH/custom-host discovery tries HTTP only after HTTPS. PAT/API payloads remain plaintext on the network; prefer HTTPS and NODE_EXTRA_CA_CERTS."
         },
         "safeCodexChange.requestTimeoutSeconds": {
           "type": "number",
@@ -307,6 +307,18 @@
             }
           },
           "description": "Optional mapping from CODEOWNERS team/group names to GitLab reviewer usernames."
+        },
+        "safeCodexChange.trustedApiHostAliases": {
+          "type": "object",
+          "default": {},
+          "scope": "machine",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": "Explicit same-instance API hostname aliases for internal SCM, e.g. {\"gitlab.company.local\":[\"10.0.0.20\"]}. Use only when both names identify the same trusted server."
         }
       }
     },
