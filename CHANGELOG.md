@@ -7,6 +7,10 @@
 
 # Changelog
 
+## 5.3.1 - 2026-09-02
+
+- Release-only patch carrying the exact Codex Safe Core 4.12.4 family pin and validated delivery contracts; no Change Safe runtime or delivery semantics change.
+
 ## 5.1.3
 
 - Align the primary VS Code SCM toolbar with the Family UI Contract: Create / Update PR or MR is the single `navigation@7` Change action after Review and Commit.
