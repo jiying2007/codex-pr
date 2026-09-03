@@ -2,11 +2,11 @@
   "productContractVersion": 1,
   "productId": "codex-change-safe",
   "product": "Codex Change Safe",
-  "productVersion": "5.4.0",
+  "productVersion": "5.4.1",
   "extensionId": "jiying2007.codex-change-safe",
   "settingsNamespace": "safeCodexChange",
-  "safeCoreVersion": "4.12.5",
-  "safeCoreCommit": "550160859a953d1c3d916a463435e3152248d18d",
+  "safeCoreVersion": "4.13.0",
+  "safeCoreCommit": "d95f67cc61ce66c16e2aa440829655919e906a75",
   "safeCoreMajorVersion": 4,
   "safeContractVersion": 2,
   "policySchemaVersion": 4,
@@ -33,6 +33,6 @@
   "defaultModelCalls": 0,
   "remoteWritesRequireConfirmation": true,
   "judgmentLifecycleVersionConsumed": 1,
-  "codexRuntimeVersionConsumed": 2,
-  "providerContractVersionConsumed": 2
+  "codexRuntimeVersionConsumed": 3,
+  "providerContractVersionConsumed": 3
 }
