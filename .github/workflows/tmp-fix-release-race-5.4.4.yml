@@ -1,4 +1,4 @@
-name: Temporary fix Change 5.4.4 release race
+name: Temporary fix Change 5.4.4 release identity
 on:
   push:
     branches: [fix/release-attestation-race-5.4.4]
@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: '22.22.2'
           cache: npm
-      - name: Stage deterministic release-race fix
+      - name: Stage Change 5.4.4 identity only
         shell: bash
         run: |
           set -euo pipefail
@@ -36,19 +36,13 @@ jobs:
           const entry='# Changelog\n\n## 5.4.4 - 2026-09-03\n\n- Make immutable GitHub Release verification resilient to the bounded attestation-indexing delay by retrying `gh release verify` and each `verify-asset` before failing closed.\n- Preserve Change 5.4.3 runtime, 8 MiB streamed SCM response ceiling, GitHub/GitLab provider behavior and zero default model calls unchanged.\n\n';
           if (!ch.includes('## 5.4.4 - 2026-09-03')) ch=entry+ch.slice('# Changelog\n\n'.length);
           fs.writeFileSync('CHANGELOG.md',ch);
-          let rel=fs.readFileSync('.github/workflows/release.yml','utf8');
-          const old='          gh release verify "$TAG"\n          for asset in codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS; do\n            gh release verify-asset "$TAG" "$asset"\n          done';
-          const neu='          release_verified=false\n          for attempt in {1..12}; do\n            if gh release verify "$TAG"; then release_verified=true; break; fi\n            sleep 5\n          done\n          test "$release_verified" = true\n          for asset in codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS; do\n            asset_verified=false\n            for attempt in {1..12}; do\n              if gh release verify-asset "$TAG" "$asset"; then asset_verified=true; break; fi\n              sleep 5\n            done\n            test "$asset_verified" = true\n          done';
-          if (!rel.includes(old)) throw new Error('release verification anchor not found');
-          rel=rel.replace(old,neu);
-          fs.writeFileSync('.github/workflows/release.yml',rel);
           NODE
-          rm .github/workflows/tmp-fix-release-race-5.4.4.yml
           npm ci --ignore-scripts --no-audit --no-fund
           npm run ci
           git diff --check
+          if git diff --quiet -- package.json package-lock.json product-contract.json README.md README.zh-CN.md CHANGELOG.md; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json package-lock.json product-contract.json README.md README.zh-CN.md CHANGELOG.md .github/workflows/release.yml .github/workflows/tmp-fix-release-race-5.4.4.yml
-          git commit -m 'fix(release): tolerate attestation indexing delay in Change 5.4.4'
+          git add package.json package-lock.json product-contract.json README.md README.zh-CN.md CHANGELOG.md
+          git commit -m 'chore(release): align Change 5.4.4 identity'
           git push origin HEAD:fix/release-attestation-race-5.4.4
