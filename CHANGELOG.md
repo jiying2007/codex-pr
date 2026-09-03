@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.4.5
+
+- Repin to Codex Safe Core 4.14.4 as a new immutable product release; no compatibility shim or stale artifact reuse is permitted.
+- Refresh generated/current-state Family identity and release evidence for the exact Core pin.
+
 ## 5.4.4 - 2026-09-03
 
 - Make immutable GitHub Release verification resilient to the bounded attestation-indexing delay by retrying `gh release verify` and each `verify-asset` before failing closed.
