@@ -138,4 +138,4 @@ MIT
 
 ## Runtime/Provider Contract v3 产品族对齐
 
-Codex Change Safe 5.4.3 固定到 Core 4.13.1，并在 Product Contract 中记录 Runtime/Provider Contract v3 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
+Codex Change Safe 5.4.4 固定到 Core 4.13.1，并在 Product Contract 中记录 Runtime/Provider Contract v3 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
