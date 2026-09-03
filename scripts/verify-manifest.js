@@ -6,8 +6,8 @@ if(contract.reviewExtensionApiContractConsumed!==2)fail('review API contract mus
 try{const entry=cp.execFileSync('git',['ls-files','-s','src/codex-safe-core'],{encoding:'utf8'}).trim();if(entry!==`160000 ${core} 0\tsrc/codex-safe-core`)fail(`Safe Core gitlink mismatch: ${entry||'<missing>'}`);}catch(error){fail(`Safe Core gitlink could not be verified: ${error.message}`);}
 if(!fs.existsSync('.gitmodules')||!fs.readFileSync('.gitmodules','utf8').includes('src/codex-safe-core'))fail('Safe Core submodule metadata missing');if(!fs.existsSync('.codex-safe.example.json'))fail('canonical Policy Schema v4 example missing');if(fs.existsSync('.codex-change-safe.json')||fs.existsSync('.codex-change-safe.example.json'))fail('parallel Change policy surface must not exist');try{const example=JSON.parse(fs.readFileSync('.codex-safe.example.json','utf8'));if(example.schemaVersion!==4||!example.change)fail('canonical policy example must contain schemaVersion 4 + change');if(!String(example.$schema||'').includes(core))fail('canonical policy example must pin schema provenance to Core 4.13 exact SHA');}catch(error){fail(`canonical policy example invalid: ${error.message}`);}
 const readmeContracts={
-  'README.md':[`- Safe Core: \`4.13.0\` exact pin \`${core}\``,'Codex Change Safe 5.4.1 pins Core 4.13.0'],
-  'README.zh-CN.md':[`- Safe Core：\`4.13.0\` 精确 pin \`${core}\``,'Codex Change Safe 5.4.1 固定到 Core 4.13.0']
+  'README.md':[`- Safe Core: \`${contract.safeCoreVersion}\` exact pin \`${core}\`` ,`Codex Change Safe ${pkg.version} pins Core ${contract.safeCoreVersion}`],
+  'README.zh-CN.md':[`- Safe Core：\`${contract.safeCoreVersion}\` 精确 pin \`${core}\`` ,`Codex Change Safe ${pkg.version} 固定到 Core ${contract.safeCoreVersion}`]
 };
 for(const[file,needles]of Object.entries(readmeContracts)){const text=fs.readFileSync(file,'utf8');for(const needle of needles)if(!text.includes(needle))fail(`${file} current identity missing: ${needle}`);}
 const changelog=fs.readFileSync('CHANGELOG.md','utf8').replace(/\r\n/g,'\n');if(!changelog.startsWith(`# Changelog\n\n## ${pkg.version}`))fail('CHANGELOG must start with the current product version under the top-level heading');

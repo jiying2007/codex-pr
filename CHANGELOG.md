@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.4.3 - 2026-09-03
+
+- Align current product/Core identity documentation with Change 5.4.3 and immutable Core 4.13.1 after the SCM response-bound patch.
+- Preserve Change 5.4.2 deterministic delivery behavior, 8 MiB streamed SCM response ceiling and zero default model calls; this patch changes documentation/product identity only.
+
 ## 5.4.2 - 2026-09-03
 
 - Repin Codex Change Safe to immutable Codex Safe Core 4.13.1 to restore exact Family trust-root alignment after the structured Codex transcript safety patch.

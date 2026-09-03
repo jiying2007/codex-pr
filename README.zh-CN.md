@@ -129,7 +129,7 @@ npm run ci
 - Publisher：`jiying2007`
 - Extension ID：`jiying2007.codex-change-safe`
 - Settings：`safeCodexChange.*`
-- Safe Core：`4.13.0` 精确 pin `479e4b33356457a90617aea7bbba5ee25b65b2c8`
+- Safe Core：`4.13.1` 精确 pin `479e4b33356457a90617aea7bbba5ee25b65b2c8`
 - Repository Policy：`.codex-safe.json` / Policy Schema v4
 
 ## License
@@ -138,4 +138,4 @@ MIT
 
 ## Runtime/Provider Contract v3 产品族对齐
 
-Codex Change Safe 5.4.1 固定到 Core 4.13.0，并在 Product Contract 中记录 Runtime/Provider Contract v3 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
+Codex Change Safe 5.4.3 固定到 Core 4.13.1，并在 Product Contract 中记录 Runtime/Provider Contract v3 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
