@@ -129,13 +129,13 @@ npm run ci
 - Publisher: `jiying2007`
 - Extension ID: `jiying2007.codex-change-safe`
 - Settings: `safeCodexChange.*`
-- Safe Core: `4.12.5` exact pin `d95f67cc61ce66c16e2aa440829655919e906a75`
+- Safe Core: `4.13.0` exact pin `d95f67cc61ce66c16e2aa440829655919e906a75`
 - Repository Policy: `.codex-safe.json` / Policy Schema v4
 
 ## License
 
 MIT
 
-## Provider Contract v2 family alignment
+## Runtime/Provider Contract v3 family alignment
 
-Codex Change Safe 5.4.0 pins Core 4.12.5 and records Runtime/Provider Contract v2 consumption for Family compatibility. Change Safe still performs zero model calls by default and therefore does not expose model relay credentials or an auth.json setting of its own; Review, Commit, Diagnose and Review Service own those model-runtime controls. Change Safe's existing `allowInsecureHttp` remains scoped only to explicitly trusted GitHub/GitLab SCM APIs.
+Codex Change Safe 5.4.1 pins Core 4.13.0 and records Runtime/Provider Contract v3 consumption for Family compatibility. Change Safe still performs zero model calls by default and therefore does not expose model relay credentials or an auth.json setting of its own; Review, Commit, Diagnose and Review Service own those model-runtime controls. Change Safe's existing `allowInsecureHttp` remains scoped only to explicitly trusted GitHub/GitLab SCM APIs.

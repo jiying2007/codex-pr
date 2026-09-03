@@ -1,9 +1,9 @@
+# Changelog
+
 ## 5.4.1 - 2026-09-03
 
 - Repin Codex Change Safe to immutable Codex Safe Core 4.13.0 and consume Runtime/Provider Contract v3 provenance without changing SCM delivery behavior.
 - Preserve GitHub/GitLab provider discovery, GitLab 14.6.1+ compatibility, private-LAN HTTP trust rules, zero default model calls, Review Receipt v5 and Commit Receipt v4 consumption unchanged.
-
-# Changelog
 
 ## 5.4.0 - 2026-09-02
 
