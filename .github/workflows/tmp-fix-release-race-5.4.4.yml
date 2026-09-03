@@ -1,0 +1,54 @@
+name: Temporary fix Change 5.4.4 release race
+on:
+  push:
+    branches: [fix/release-attestation-race-5.4.4]
+permissions:
+  contents: write
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
+        with:
+          node-version: '22.22.2'
+          cache: npm
+      - name: Stage deterministic release-race fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const pkg=JSON.parse(fs.readFileSync('package.json','utf8')); pkg.version='5.4.4'; fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');
+          const contract=JSON.parse(fs.readFileSync('product-contract.json','utf8')); contract.productVersion='5.4.4'; fs.writeFileSync('product-contract.json',JSON.stringify(contract,null,2)+'\n');
+          const lock=JSON.parse(fs.readFileSync('package-lock.json','utf8')); lock.version='5.4.4'; lock.packages[''].version='5.4.4'; fs.writeFileSync('package-lock.json',JSON.stringify(lock,null,2)+'\n');
+          for (const file of ['README.md','README.zh-CN.md']) {
+            let t=fs.readFileSync(file,'utf8');
+            t=t.replaceAll('Codex Change Safe 5.4.3','Codex Change Safe 5.4.4');
+            fs.writeFileSync(file,t);
+          }
+          let ch=fs.readFileSync('CHANGELOG.md','utf8');
+          const entry='# Changelog\n\n## 5.4.4 - 2026-09-03\n\n- Make immutable GitHub Release verification resilient to the bounded attestation-indexing delay by retrying `gh release verify` and each `verify-asset` before failing closed.\n- Preserve Change 5.4.3 runtime, 8 MiB streamed SCM response ceiling, GitHub/GitLab provider behavior and zero default model calls unchanged.\n\n';
+          if (!ch.includes('## 5.4.4 - 2026-09-03')) ch=entry+ch.slice('# Changelog\n\n'.length);
+          fs.writeFileSync('CHANGELOG.md',ch);
+          let rel=fs.readFileSync('.github/workflows/release.yml','utf8');
+          const old='          gh release verify "$TAG"\n          for asset in codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS; do\n            gh release verify-asset "$TAG" "$asset"\n          done';
+          const neu='          release_verified=false\n          for attempt in {1..12}; do\n            if gh release verify "$TAG"; then release_verified=true; break; fi\n            sleep 5\n          done\n          test "$release_verified" = true\n          for asset in codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS; do\n            asset_verified=false\n            for attempt in {1..12}; do\n              if gh release verify-asset "$TAG" "$asset"; then asset_verified=true; break; fi\n              sleep 5\n            done\n            test "$asset_verified" = true\n          done';
+          if (!rel.includes(old)) throw new Error('release verification anchor not found');
+          rel=rel.replace(old,neu);
+          fs.writeFileSync('.github/workflows/release.yml',rel);
+          NODE
+          rm .github/workflows/tmp-fix-release-race-5.4.4.yml
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run ci
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json product-contract.json README.md README.zh-CN.md CHANGELOG.md .github/workflows/release.yml .github/workflows/tmp-fix-release-race-5.4.4.yml
+          git commit -m 'fix(release): tolerate attestation indexing delay in Change 5.4.4'
+          git push origin HEAD:fix/release-attestation-race-5.4.4
