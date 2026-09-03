@@ -3,7 +3,8 @@
 ## 5.4.2 - 2026-09-03
 
 - Repin Codex Change Safe to immutable Codex Safe Core 4.13.1 to restore exact Family trust-root alignment after the structured Codex transcript safety patch.
-- Change remains deterministic with zero default model calls; GitHub/GitLab delivery behavior, authorization gates and receipt contracts are unchanged.
+- Bound every GitHub/GitLab HTTP response body to 8 MiB by streamed bytes, reject oversized `Content-Length` up front, and fail closed with `ESCMOUTPUT` instead of allowing unbounded Extension Host memory growth.
+- Add a streamed oversized-response regression; Change remains deterministic with zero default model calls and preserves delivery authorization and receipt semantics.
 
 ## 5.4.1 - 2026-09-03
 
