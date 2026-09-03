@@ -129,7 +129,7 @@ npm run ci
 - Publisher：`jiying2007`
 - Extension ID：`jiying2007.codex-change-safe`
 - Settings：`safeCodexChange.*`
-- Safe Core：`4.13.0` 精确 pin `479e4b33356457a90617aea7bbba5ee25b65b2c8`
+- Safe Core：`4.13.1` 精确 pin `479e4b33356457a90617aea7bbba5ee25b65b2c8`
 - Repository Policy：`.codex-safe.json` / Policy Schema v4
 
 ## License
