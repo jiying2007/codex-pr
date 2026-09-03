@@ -112,7 +112,17 @@ jobs:
             sleep 5
           done
           test "$immutable" = true
-          gh release verify "$TAG"
+          release_verified=false
+          for attempt in {1..12}; do
+            if gh release verify "$TAG"; then release_verified=true; break; fi
+            sleep 5
+          done
+          test "$release_verified" = true
           for asset in codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS; do
-            gh release verify-asset "$TAG" "$asset"
+            asset_verified=false
+            for attempt in {1..12}; do
+              if gh release verify-asset "$TAG" "$asset"; then asset_verified=true; break; fi
+              sleep 5
+            done
+            test "$asset_verified" = true
           done

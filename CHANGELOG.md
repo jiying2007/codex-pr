@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.4.4 - 2026-09-03
+
+- Make immutable GitHub Release verification resilient to the bounded attestation-indexing delay by retrying `gh release verify` and each `verify-asset` before failing closed.
+- Preserve Change 5.4.3 runtime, 8 MiB streamed SCM response ceiling, GitHub/GitLab provider behavior and zero default model calls unchanged.
+
 ## 5.4.3 - 2026-09-03
 
 - Align current product/Core identity documentation with Change 5.4.3 and immutable Core 4.13.1 after the SCM response-bound patch.
