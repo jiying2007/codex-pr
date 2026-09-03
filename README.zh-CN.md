@@ -33,7 +33,7 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 - Change 阶段默认模型调用为 `0`；title/body/risk/evidence 由 Git、Receipt 与 SCM state 确定性生成。
 - 所有远端 mutation 都统一经过最新 Delivery Authorization Gate，并重新验证当前交付证据。
-- 仓库策略唯一入口是 Safe Core 4.12.5 的 committed `.codex-safe.json` **Policy Schema v4**。
+- 仓库策略唯一入口是 Safe Core 4.13.0 的 committed `.codex-safe.json` **Policy Schema v4**。
 - Change Safe 直接消费 Core 的 parser、闭合字段/类型校验与 Policy fingerprint，不维护第二套 Repository Policy Schema。
 - 本地 Change settings 只能加严 committed `change` rules；Provider 原生要求与之取并集，本地不能削弱。
 - GitHub/GitLab 使用各自的 provider-specific merge-state classifier；未知状态一律进入 `WAITING`。
@@ -53,7 +53,7 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/550160859a953d1c3d916a463435e3152248d18d/codex-safe.schema.json",
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/d95f67cc61ce66c16e2aa440829655919e906a75/codex-safe.schema.json",
   "schemaVersion": 4,
   "review": {},
   "commit": {},
@@ -129,7 +129,7 @@ npm run ci
 - Publisher：`jiying2007`
 - Extension ID：`jiying2007.codex-change-safe`
 - Settings：`safeCodexChange.*`
-- Safe Core：`4.12.5` 精确 pin `550160859a953d1c3d916a463435e3152248d18d`
+- Safe Core：`4.12.5` 精确 pin `d95f67cc61ce66c16e2aa440829655919e906a75`
 - Repository Policy：`.codex-safe.json` / Policy Schema v4
 
 ## License
