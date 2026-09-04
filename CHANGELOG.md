@@ -1,3 +1,7 @@
+## 5.4.9
+
+- Make VS Code Marketplace publication manual-only for the current stage; immutable GitHub Release remains the required Family distribution authority, while manual Marketplace publication keeps exact-release verification and receipt generation when explicitly invoked.
+
 # Changelog
 
 ## 5.4.8
