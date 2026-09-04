@@ -2,7 +2,7 @@
   "productContractVersion": 2,
   "productId": "codex-change-safe",
   "product": "Codex Change Safe",
-  "productVersion": "5.4.8",
+  "productVersion": "5.4.9",
   "extensionId": "jiying2007.codex-change-safe",
   "settingsNamespace": "safeCodexChange",
   "safeCoreVersion": "4.16.0",

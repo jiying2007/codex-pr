@@ -108,7 +108,7 @@ The provider contract matrix exercises GitLab CE 14.6.1, 17.11.7 and 19.3.0. Ext
 
 Install the immutable VSIX from GitHub Release. Each release includes SPDX SBOM, SHA256SUMS and GitHub build-provenance attestation. See [VERIFY_RELEASE.md](VERIFY_RELEASE.md) and [PUBLISHING.md](PUBLISHING.md).
 
-Marketplace publication uses `jiying2007.codex-change-safe`; the retired `jiying2007.codex-pr-safe` identity is not reused.
+Marketplace publication uses `jiying2007.codex-change-safe`; the retired `jiying2007.codex-pr-safe` identity is not reused. Marketplace publication is manual-only in the current stage; the immutable GitHub Release remains the required Family distribution authority.
 
 ## Development
 
@@ -138,4 +138,4 @@ MIT
 
 ## Runtime/Provider Contract v3 family alignment
 
-Codex Change Safe 5.4.8 pins Core 4.16.0 and records Runtime/Provider Contract v3 consumption for Family compatibility. Change Safe still performs zero model calls by default and therefore does not expose model relay credentials or an auth.json setting of its own; Review, Commit, Diagnose and Review Service own those model-runtime controls. Change Safe's existing `allowInsecureHttp` remains scoped only to explicitly trusted GitHub/GitLab SCM APIs.
+Codex Change Safe 5.4.9 pins Core 4.16.0 and records Runtime/Provider Contract v3 consumption for Family compatibility. Change Safe still performs zero model calls by default and therefore does not expose model relay credentials or an auth.json setting of its own; Review, Commit, Diagnose and Review Service own those model-runtime controls. Change Safe's existing `allowInsecureHttp` remains scoped only to explicitly trusted GitHub/GitLab SCM APIs.
