@@ -108,7 +108,7 @@ Provider Contract Matrix 真实验证 GitLab CE 14.6.1、17.11.7、19.3.0；VS C
 
 从 GitHub Release 安装 immutable VSIX。每个 Release 只构建一次，并附带 SPDX SBOM、SHA256SUMS 与 GitHub build-provenance attestation。见 [VERIFY_RELEASE.md](VERIFY_RELEASE.md) 与 [PUBLISHING.md](PUBLISHING.md)。
 
-Marketplace 使用新身份 `jiying2007.codex-change-safe`；不会复用已退役的 `jiying2007.codex-pr-safe` 身份。
+Marketplace 使用新身份 `jiying2007.codex-change-safe`；不会复用已退役的 `jiying2007.codex-pr-safe` 身份。当前阶段 Marketplace 仅手工发布；immutable GitHub Release 仍是 Family 必需的分发权威。
 
 ## 开发
 
@@ -138,4 +138,4 @@ MIT
 
 ## Runtime/Provider Contract v3 产品族对齐
 
-Codex Change Safe 5.4.8 固定到 Core 4.16.0，并在 Product Contract 中记录 Runtime/Provider Contract v3 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
+Codex Change Safe 5.4.9 固定到 Core 4.16.0，并在 Product Contract 中记录 Runtime/Provider Contract v3 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
