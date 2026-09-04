@@ -1,0 +1,39 @@
+name: Temporary Change 5.4.7 README Identity Repair
+
+on:
+  push:
+    branches: ["chore/core-4.15-governance"]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: chore/core-4.15-governance
+          fetch-depth: 0
+      - name: Repair current identity only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          changes={
+            'README.md':('Codex Change Safe 5.4.6 pins Core 4.15.0','Codex Change Safe 5.4.7 pins Core 4.15.0'),
+            'README.zh-CN.md':('Codex Change Safe 5.4.6 固定到 Core 4.15.0','Codex Change Safe 5.4.7 固定到 Core 4.15.0'),
+          }
+          for file,(old,new) in changes.items():
+              p=Path(file); text=p.read_text()
+              if text.count(old)!=1: raise SystemExit(f'{file}: expected exactly one current identity anchor, got {text.count(old)}')
+              p.write_text(text.replace(old,new,1))
+          PY
+          git config user.name codex-safe-family-bot
+          git config user.email codex-safe-family-bot@users.noreply.github.com
+          git add README.md README.zh-CN.md
+          git commit -m 'docs(change): align 5.4.7 current identity'
+          git push origin HEAD:chore/core-4.15-governance
