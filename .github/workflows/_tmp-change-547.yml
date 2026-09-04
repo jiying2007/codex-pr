@@ -1,0 +1,37 @@
+name: Temporary Change 5.4.7 Governance Finalizer
+
+on:
+  push:
+    branches: ["chore/core-4.15-governance"]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: chore/core-4.15-governance
+          fetch-depth: 0
+      - name: Finalize deterministic 5.4.7 identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const pkg=require('./package.json');pkg.version='5.4.7';fs.writeFileSync('package.json',JSON.stringify(pkg,null,2)+'\n');
+          const lock=require('./package-lock.json');lock.version='5.4.7';lock.packages[''].version='5.4.7';fs.writeFileSync('package-lock.json',JSON.stringify(lock,null,2)+'\n');
+          const pc=require('./product-contract.json');pc.productVersion='5.4.7';if(pc.defaultModelCalls!==0)throw new Error('Change must remain zero-model');fs.writeFileSync('product-contract.json',JSON.stringify(pc,null,2)+'\n');
+          const p='CHANGELOG.md';if(fs.existsSync(p)){let text=fs.readFileSync(p,'utf8');const h='## 5.4.7 - 2026-09-04\n\n- Repin Release Integrity to immutable Core 4.15.0 while preserving the deterministic Change Safe authorization/delivery boundary.\n- Reassert defaultModelCalls=0: Change Safe does not consume Model Routing, Machine Registry, Scout, Reviewer, or Adjudicator execution paths.\n\n';if(!text.includes('## 5.4.7 - 2026-09-04'))text=text.includes('# Changelog\n')?text.replace('# Changelog\n','# Changelog\n\n'+h):h+text;fs.writeFileSync(p,text);}
+          NODE
+          git config user.name codex-safe-family-bot
+          git config user.email codex-safe-family-bot@users.noreply.github.com
+          git add package.json package-lock.json product-contract.json CHANGELOG.md 2>/dev/null || git add package.json package-lock.json product-contract.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore(change): release 5.4.7 governance cleanup'
+            git push origin HEAD:chore/core-4.15-governance
+          fi
