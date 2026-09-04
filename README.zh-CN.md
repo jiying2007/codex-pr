@@ -33,7 +33,7 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 - Change 阶段默认模型调用为 `0`；title/body/risk/evidence 由 Git、Receipt 与 SCM state 确定性生成。
 - 所有远端 mutation 都统一经过最新 Delivery Authorization Gate，并重新验证当前交付证据。
-- 仓库策略唯一入口是 Safe Core 4.15.0 的 committed `.codex-safe.json` **Policy Schema v4**。
+- 仓库策略唯一入口是 Safe Core 4.16.0 的 committed `.codex-safe.json` **Policy Schema v4**。
 - Change Safe 直接消费 Core 的 parser、闭合字段/类型校验与 Policy fingerprint，不维护第二套 Repository Policy Schema。
 - 本地 Change settings 只能加严 committed `change` rules；Provider 原生要求与之取并集，本地不能削弱。
 - GitHub/GitLab 使用各自的 provider-specific merge-state classifier；未知状态一律进入 `WAITING`。
@@ -53,7 +53,7 @@ Remote SSH、Dev Containers、Codespaces、WSL 场景下，需要在 workspace E
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/e962826ee6556fd8ffa74ab1994bf43d62826f10/codex-safe.schema.json",
+  "$schema": "https://raw.githubusercontent.com/jiying2007/codex-safe-core/786e3a3fc896e0e623af6fe63dbf814ddd09bad8/codex-safe.schema.json",
   "schemaVersion": 4,
   "review": {},
   "commit": {},
@@ -129,7 +129,7 @@ npm run ci
 - Publisher：`jiying2007`
 - Extension ID：`jiying2007.codex-change-safe`
 - Settings：`safeCodexChange.*`
-- Safe Core：`4.15.0` 精确 pin `e962826ee6556fd8ffa74ab1994bf43d62826f10`
+- Safe Core：`4.16.0` 精确 pin `786e3a3fc896e0e623af6fe63dbf814ddd09bad8`
 - Repository Policy：`.codex-safe.json` / Policy Schema v4
 
 ## License
@@ -138,4 +138,4 @@ MIT
 
 ## Runtime/Provider Contract v3 产品族对齐
 
-Codex Change Safe 5.4.7 固定到 Core 4.15.0，并在 Product Contract 中记录 Runtime/Provider Contract v3 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。
+Codex Change Safe 5.4.8 固定到 Core 4.16.0，并在 Product Contract 中记录 Runtime/Provider Contract v3 消费关系。Change Safe 默认模型调用仍为 0，因此不会额外暴露模型中转站凭据或 auth.json 设置；模型 Runtime 配置由 Review、Commit、Diagnose 与 Review Service 使用。Change Safe 现有 `allowInsecureHttp` 仍只服务于显式信任的 GitHub/GitLab SCM API。

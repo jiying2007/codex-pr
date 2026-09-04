@@ -72,6 +72,15 @@ jobs:
         with: { node-version: '22.22.2', cache: npm }
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run package
+      - name: Generate Consumer CI Receipt
+        env:
+          CI_SOURCE_SHA: ${{ github.sha }}
+          CI_WORKFLOW_NAME: Release v5
+          CI_RUN_ID: ${{ github.run_id }}
+          CI_RUN_ATTEMPT: ${{ github.run_attempt }}
+          CI_EVENT: ${{ github.event_name }}
+          CI_SUITES: ci,extension-host-linux-windows-macos,package
+        run: node src/codex-safe-core/scripts/generate-consumer-ci-receipt.js --output CONSUMER_CI_RECEIPT.json
       - name: Verify VSIX and generate evidence
         shell: bash
         run: |
@@ -81,12 +90,14 @@ jobs:
           grep -Fx 'extension/dist/extension.js' /tmp/vsix.txt
           if grep -E '^extension/(extension\.js|src/|test/|scripts/|package-lock\.json)' /tmp/vsix.txt; then echo 'development files leaked into VSIX' >&2; exit 1; fi
           npm sbom --sbom-format spdx > SBOM.spdx.json
-          sha256sum "$vsix" SBOM.spdx.json > SHA256SUMS
+          test -s CONSUMER_CI_RECEIPT.json
+          sha256sum "$vsix" SBOM.spdx.json CONSUMER_CI_RECEIPT.json > SHA256SUMS
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
         with:
           subject-path: |
             codex-change-safe-${{ needs.validate.outputs.version }}.vsix
             SBOM.spdx.json
+            CONSUMER_CI_RECEIPT.json
             SHA256SUMS
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -94,6 +105,7 @@ jobs:
           path: |
             codex-change-safe-${{ needs.validate.outputs.version }}.vsix
             SBOM.spdx.json
+            CONSUMER_CI_RECEIPT.json
             SHA256SUMS
       - name: Tag and publish immutable GitHub Release
         env: { GH_TOKEN: '${{ github.token }}', TAG: '${{ needs.validate.outputs.tag }}' }
@@ -104,7 +116,7 @@ jobs:
             git fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"; test "$(git rev-list -n1 "$TAG")" = "$GITHUB_SHA"
           else gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${TAG}" -f sha="$GITHUB_SHA" >/dev/null; fi
           gh release view "$TAG" >/dev/null 2>&1 && { echo "release already exists" >&2; exit 1; } || true
-          gh release create "$TAG" codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS --title "Codex Change Safe ${{ needs.validate.outputs.version }}" --generate-notes --verify-tag
+          gh release create "$TAG" codex-change-safe-*.vsix SBOM.spdx.json CONSUMER_CI_RECEIPT.json SHA256SUMS --title "Codex Change Safe ${{ needs.validate.outputs.version }}" --generate-notes --verify-tag
           immutable=false
           for attempt in {1..12}; do
             immutable=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.immutable')
@@ -118,7 +130,7 @@ jobs:
             sleep 5
           done
           test "$release_verified" = true
-          for asset in codex-change-safe-*.vsix SBOM.spdx.json SHA256SUMS; do
+          for asset in codex-change-safe-*.vsix SBOM.spdx.json CONSUMER_CI_RECEIPT.json SHA256SUMS; do
             asset_verified=false
             for attempt in {1..12}; do
               if gh release verify-asset "$TAG" "$asset"; then asset_verified=true; break; fi
