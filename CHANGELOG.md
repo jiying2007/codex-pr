@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.4.7 - 2026-09-04
+
+- Repin Release Integrity to immutable Core 4.15.0 while preserving the deterministic Change Safe authorization/delivery boundary.
+- Reassert defaultModelCalls=0: Change Safe does not consume Model Routing, Machine Registry, Scout, Reviewer, or Adjudicator execution paths.
+
+
 ## 5.4.6
 
 - Repin to Codex Safe Core 4.15.0 as a new immutable product release; no compatibility shim or stale artifact reuse is permitted.
