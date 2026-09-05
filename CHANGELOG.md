@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.4.11
+
+- Consolidate the full Change pull-request validation graph behind the canonical `CI Gate` while retaining the six-way product matrix, Extension Host validation, CodeQL, dependency review, Family governance and real GitLab CE 14.6.1 / 17.11.7 / 19.3.0 E2E; publish this exact workflow-consolidated main snapshot as a new immutable product release.
+
 ## 5.4.10
 
 - Repin to Codex Safe Core 4.17.0 because the shipped Core runtime digest changed to `a41fa0e2c02d1977d6f1f8e0b7efff0a3d220d1149498c3d4d5a4ecbb1b03808`; publish a new immutable product release and distribution receipt.
