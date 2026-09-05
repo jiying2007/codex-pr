@@ -1,7 +1,6 @@
 name: GitLab Provider Matrix
 on:
-  pull_request:
-    branches: [main]
+  workflow_call:
   schedule:
     - cron: '41 2 * * 1'
   workflow_dispatch:
