@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.4.12
+
+- Repin to Codex Safe Core 4.18.0 because the shipped Core runtime digest changed to `0b9c507ddb74bf40a0b950c3d8548ae747f547f76d3d2d37cebbd761cf28f5a0`; publish a new immutable product release and distribution receipt.
+- Refresh Product Contract v2 and generated/current-state Family identity for the exact Core pin.
+
 ## 5.4.11
 
 - Consolidate the full Change pull-request validation graph behind the canonical `CI Gate` while retaining the six-way product matrix, Extension Host validation, CodeQL, dependency review, Family governance and real GitLab CE 14.6.1 / 17.11.7 / 19.3.0 E2E; publish this exact workflow-consolidated main snapshot as a new immutable product release.
