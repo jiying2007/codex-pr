@@ -43,15 +43,13 @@ jobs:
             fixture_state="$(docker inspect --format '{{.State.Status}}' gitlab 2>/dev/null || true)"
             if [ "$fixture_state" != running ]; then
               echo "GitLab fixture is not running: ${fixture_state:-unavailable}" >&2
-              docker inspect --format '{{json .State}}' gitlab || true
-              docker logs --tail 500 gitlab || true
               exit 1
             fi
           }
           for i in $(seq 1 210); do
             require_running_container
             if curl -fsS http://127.0.0.1:8080/users/sign_in >/dev/null 2>&1 && curl -fsS http://127.0.0.1:8080/-/health | grep -qx 'GitLab OK' && docker exec gitlab gitlab-rails runner "raise unless User.find_by_username('root')" >/dev/null 2>&1; then break; fi
-            if [ "$i" = 210 ]; then docker logs gitlab; exit 1; fi
+            if [ "$i" = 210 ]; then echo 'GitLab provider dependencies did not become ready.' >&2; exit 1; fi
             sleep 5
           done
       - name: Create deterministic API token
@@ -62,5 +60,79 @@ jobs:
           GITLAB_BASE_URL: http://127.0.0.1:8080
           GITLAB_API_TOKEN: token-string-here123
         run: node scripts/gitlab-system-smoke.js
-      - if: failure()
-        run: docker logs --tail 500 gitlab
+      - name: GitLab diagnostics on failure
+        id: gitlab_diagnostics
+        if: failure()
+        env:
+          GITLAB_FIXTURE_VERSION: ${{ matrix.gitlab }}
+          GITLAB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const os = require('node:os');
+          const { spawnSync } = require('node:child_process');
+          const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'gitlab-diagnostics-'));
+          const limit = 128 * 1024;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `directory=${directory}\n`);
+          function redact(value) {
+            return String(value || '')
+              .replaceAll('g4TQ9zV2mL7xK5pR8wN3cY6fH4sJ9', '[REDACTED]')
+              .replaceAll('token-string-here123', '[REDACTED]')
+              .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/g, '[REDACTED PRIVATE KEY]')
+              .split('\n').map(line => /authorization|token|password|passwd|secret|credential|cookie|bearer|api[-_ ]?key|gl(?:pat|rt|oas|cbt|ptt|dt|agent|goat)-|gh[pousr]_|github_pat_|https?:\/\/[^\s/]+:[^\s/]+@/i.test(line)
+                ? '[REDACTED SENSITIVE LINE]' : line).join('\n');
+          }
+          function bounded(value) {
+            const bytes = Buffer.from(redact(value));
+            if (bytes.length <= limit) return bytes;
+            const prefix = bytes.subarray(0, limit).toString('utf8');
+            return Buffer.from(prefix.slice(0, prefix.lastIndexOf('\n') + 1));
+          }
+          const captures = [];
+          for (const [name, args] of [
+            ['container-state.json', ['inspect', '--format', '{{json .State}}', 'gitlab']],
+            ['service-status.log', ['exec', 'gitlab', 'gitlab-ctl', 'status']],
+            ['container.log', ['logs', '--timestamps', '--tail', '500', 'gitlab']],
+          ]) {
+            const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 20000,
+              killSignal: 'SIGKILL', maxBuffer: limit });
+            let stdout = result.stdout || '';
+            let stderr = result.stderr || '';
+            if (result.error || result.signal || result.status !== 0) {
+              stdout = stdout.slice(0, stdout.lastIndexOf('\n') + 1);
+              stderr = stderr.slice(0, stderr.lastIndexOf('\n') + 1);
+            }
+            let output;
+            if (name === 'container-state.json') {
+              try {
+                const state = JSON.parse(stdout);
+                // Do not persist Config.Env, health command output, or the full inspect object.
+                const allowed = ['Status', 'Running', 'Paused', 'Restarting', 'OOMKilled', 'Dead',
+                  'Pid', 'ExitCode', 'Error', 'StartedAt', 'FinishedAt'];
+                output = JSON.stringify(Object.fromEntries(allowed.filter(key => key in state &&
+                  ['string', 'number', 'boolean'].includes(typeof state[key]))
+                  .map(key => [key, typeof state[key] === 'string' ? redact(state[key]).slice(0, 4096) : state[key]])), null, 2);
+              } catch { output = JSON.stringify({ unavailable: true }); }
+            } else output = stdout + (stderr ? '\n[stderr]\n' + stderr : '');
+            const content = bounded(output);
+            fs.writeFileSync(path.join(directory, name), content, { mode: 0o600, flag: 'wx' });
+            captures.push({ file: name, exitCode: result.status, signal: result.signal,
+              errorCode: result.error?.code || null, bytes: content.length });
+          }
+          fs.writeFileSync(path.join(directory, 'identity.json'), JSON.stringify({
+            runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            gitlabVersion: process.env.GITLAB_FIXTURE_VERSION, testedCommitSha: process.env.GITHUB_SHA,
+            pullRequestHeadSha: process.env.GITLAB_PR_HEAD_SHA || null,
+            capturedAt: new Date().toISOString(), captures,
+          }, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+          console.log('Preserved bounded, redacted GitLab fixture failure diagnostics.');
+          NODE
+      - name: Preserve GitLab failure diagnostics
+        if: ${{ failure() && steps.gitlab_diagnostics.outputs.directory != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gitlab-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.gitlab }}
+          path: ${{ steps.gitlab_diagnostics.outputs.directory }}
+          retention-days: 3
+          if-no-files-found: error
