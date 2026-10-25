@@ -27,13 +27,29 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Start GitLab CE
         run: |
+          fixture_omnibus_config="external_url 'http://localhost'; gitlab_rails['initial_root_password']='g4TQ9zV2mL7xK5pR8wN3cY6fH4sJ9'; gitlab_rails['monitoring_whitelist']=['0.0.0.0/0']"
+          if [ '${{ matrix.gitlab }}' = '14.6.1-ce.0' ]; then
+            # Avoid the observed 14.6 runit logrotate/log startup timeout.
+            # Keep container logs; rotation is unnecessary for this CI fixture.
+            fixture_omnibus_config+="; logrotate['enable']=false"
+          fi
           docker run -d --name gitlab --shm-size=256m -p 127.0.0.1:8080:80 \
-            -e GITLAB_OMNIBUS_CONFIG="external_url 'http://localhost'; gitlab_rails['initial_root_password']='g4TQ9zV2mL7xK5pR8wN3cY6fH4sJ9'; gitlab_rails['monitoring_whitelist']=['0.0.0.0/0']" \
+            -e GITLAB_OMNIBUS_CONFIG="$fixture_omnibus_config" \
             "gitlab/gitlab-ce:${{ matrix.gitlab }}"
       - name: Wait for GitLab
         run: |
           set -euo pipefail
+          require_running_container() {
+            fixture_state="$(docker inspect --format '{{.State.Status}}' gitlab 2>/dev/null || true)"
+            if [ "$fixture_state" != running ]; then
+              echo "GitLab fixture is not running: ${fixture_state:-unavailable}" >&2
+              docker inspect --format '{{json .State}}' gitlab || true
+              docker logs --tail 500 gitlab || true
+              exit 1
+            fi
+          }
           for i in $(seq 1 210); do
+            require_running_container
             if curl -fsS http://127.0.0.1:8080/users/sign_in >/dev/null 2>&1 && curl -fsS http://127.0.0.1:8080/-/health | grep -qx 'GitLab OK' && docker exec gitlab gitlab-rails runner "raise unless User.find_by_username('root')" >/dev/null 2>&1; then break; fi
             if [ "$i" = 210 ]; then docker logs gitlab; exit 1; fi
             sleep 5
