@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.4.13
+
+- Require the actual CodeQL SARIF findings gate in CI and preserve current-run analysis evidence when analysis or upload fails.
+- Wait for completed initial GitLab reconfiguration, stable critical processes and authenticated API readiness before the real 14.6.1 / 17.11.7 / 19.3.0 provider checks; retain bounded, redacted failure diagnostics.
+- Update the pinned Scorecard action to remove token-variable logging.
+
 ## 5.4.12
 
 - Repin to Codex Safe Core 4.18.0 because the shipped Core runtime digest changed to `0b9c507ddb74bf40a0b950c3d8548ae747f547f76d3d2d37cebbd761cf28f5a0`; publish a new immutable product release and distribution receipt.
