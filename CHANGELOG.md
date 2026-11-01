@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.4.13
+
+- Repin to Codex Safe Core 4.18.2 because the shipped Core runtime digest changed to `d50d065c716dcb5b70f9cdd832ea05e6a9d49617bc6582567b3c69a7fb133d6e`; publish a new immutable product release and required distribution evidence.
+- Refresh Product Contract v2 and generated/current-state Family identity for the exact Core pin.
+
 ## 5.4.12
 
 - Repin to Codex Safe Core 4.18.0 because the shipped Core runtime digest changed to `0b9c507ddb74bf40a0b950c3d8548ae747f547f76d3d2d37cebbd761cf28f5a0`; publish a new immutable product release and distribution receipt.
