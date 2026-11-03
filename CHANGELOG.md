@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.4.14
+
+- Bind PR/MR confirmation to the exact repository, source/target branches, Head SHA and fresh preflight identity; fail closed on intervening SCM changes.
+- Use GitHub `expectedHeadOid` for auto-merge and merge-queue mutations, with regression coverage for stale/missing SHA.
+- Only run Release Integrity after the actual Release publisher job succeeded; no-release main pushes cannot miscompare the previous immutable tag.
+- Preserve exact immutable Core 4.18.2 pin and zero default model calls.
+
+
 ## 5.4.13
 
 - Repin to Codex Safe Core 4.18.2 because the shipped Core runtime digest changed to `d50d065c716dcb5b70f9cdd832ea05e6a9d49617bc6582567b3c69a7fb133d6e`; publish a new immutable product release and required distribution evidence.
