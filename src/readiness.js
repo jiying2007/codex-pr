@@ -18,8 +18,8 @@ async function evaluateReadiness({provider,change,requiredChecks=[],requiredAppr
   const effectiveApprovals=Math.max(Number(requiredApprovals||0),Number(nativePolicy.requiredApprovals||0));
   const [checks,approvals,approvalState,externalChecks]=await Promise.all([
     provider.listChecks(fresh.provider==='gitlab'?fresh.number:(fresh.headSha||'')), provider.listApprovals(fresh.number),
-    typeof provider.getApprovalState==='function'?provider.getApprovalState(fresh.number).catch(()=>null):null,
-    typeof provider.listExternalStatusChecks==='function'?provider.listExternalStatusChecks(fresh.number).catch(()=>[]):[]
+    typeof provider.getApprovalState==='function'?provider.getApprovalState(fresh.number):null,
+    typeof provider.listExternalStatusChecks==='function'?provider.listExternalStatusChecks(fresh.number):[]
   ]);
   const selected=evaluateChecks(checks,effectiveRequired); for(const c of selected){if(c.state==='success')passed.push({type:'check',name:c.name});else if(c.state==='pending')pending.push({code:'check_pending',message:`Check pending: ${c.name}`});else blockers.push({code:c.state==='missing'?'required_check_missing':'check_failed',message:`${c.state==='missing'?'Required check missing':'Check failed'}: ${c.name}`});}
   for(const c of externalChecks){if(c.state==='success')passed.push({type:'external-check',name:c.name});else if(c.state==='pending')pending.push({code:'external_check_pending',message:`External status check pending: ${c.name}`});else blockers.push({code:'external_check_failed',message:`External status check failed: ${c.name}`});}
