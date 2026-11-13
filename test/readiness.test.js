@@ -21,3 +21,19 @@ test('SCM verification transport failures never become zero approvals or absent 
  await assert.rejects(()=>evaluateReadiness({provider:q,change:{provider:'gitlab',number:1}}),/external checks API timed out/);
  assert.equal((await evaluateReadiness({provider:base(),change:{provider:'gitlab',number:1}})).state,'READY_TO_MERGE');
 });
+
+test('same-name GitHub status and check-run must both be green before readiness can pass',()=>{
+ const {evaluateChecks}=require('../src/readiness');
+ const status={name:'CI Gate',integrationId:null,state:'success'};
+ const failedRun={name:'CI Gate',integrationId:15368,state:'failure'};
+ for(const values of [[status,failedRun],[failedRun,status]]){
+   const selected=evaluateChecks(values,['CI Gate']);
+   assert.equal(selected[0].state,'failure','a green commit status cannot conceal a failed check run');
+ }
+ const pending={name:'CI Gate',integrationId:15368,state:'pending'};
+ assert.equal(evaluateChecks([status,pending],['CI Gate'])[0].state,'pending');
+ assert.equal(evaluateChecks([status,{...pending,state:'success'}],['CI Gate'])[0].state,'success');
+ assert.equal(evaluateChecks([status],[{name:'CI Gate',integrationId:15368}])[0].state,'missing');
+ assert.equal(evaluateChecks([status,{...pending,state:'unknown'}],['CI Gate'])[0].state,'failure');
+ assert.equal(evaluateChecks([],['CI Gate'])[0].state,'missing');
+});
