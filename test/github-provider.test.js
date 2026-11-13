@@ -27,3 +27,16 @@ test('missing or malformed PR head prevents remote GitHub merge mutation',async(
  }
  assert.deepEqual(calls,[]);
 });
+
+test('GitHub check-run API failure cannot be concealed by an unrelated successful commit status',async()=>{
+ const p=provider();
+ p.client.paginate=async()=>({items:[{context:'CI Gate',state:'success'}],complete:true});
+ p.client.paginateCollection=async()=>{throw new Error('check-runs API failed');};
+ await assert.rejects(()=>p.listChecks('a'.repeat(40)),/check-runs API failed/);
+});
+test('GitHub truncated check-run inventory fails closed',async()=>{
+ const p=provider();
+ p.client.paginate=async()=>({items:[],complete:true});
+ p.client.paginateCollection=async()=>({items:[],complete:false});
+ await assert.rejects(()=>p.listChecks('a'.repeat(40)),/exhaustively/);
+});
