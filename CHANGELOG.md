@@ -2,6 +2,7 @@
 
 ## 5.4.15
 
+- Require every same-name GitHub Commit Status and Check Run to pass before marking a required check successful; a green first result cannot conceal another failed or pending check.
 - Fail closed when GitHub commit check-run inventory cannot be read; a successful legacy status no longer masks a failed or incomplete check-runs API request.
 - Preserve GitLab approval-state and external-status-check acquisition failures instead of silently converting errors into absent checks, which could make a protected MR appear ready.
 - Add adversarial regression coverage for inaccessible/truncated GitHub checks, GitLab evidence transport failures and the successful bounded path. No additional model calls or merge permissions.
