@@ -1,8 +1,23 @@
 'use strict';
 function checkKey(item){return item.integrationId ? `${item.name}#${item.integrationId}` : item.name;}
 function evaluateChecks(checks, required) {
-  const exact=new Map(checks.map(c=>[checkKey(c),c])), byName=new Map(); for(const c of checks)if(!byName.has(c.name))byName.set(c.name,c);
-  return (required||[]).map(req=>{const r=typeof req==='string'?{name:req}:req; return (r.integrationId?exact.get(`${r.name}#${r.integrationId}`):byName.get(r.name))||{name:r.name,integrationId:r.integrationId||null,state:'missing'};});
+  const groups=new Map();
+  for(const c of checks||[]){
+    if(!c||typeof c.name!=='string')continue;
+    if(!groups.has(c.name))groups.set(c.name,[]);
+    groups.get(c.name).push(c);
+  }
+  return (required||[]).map(req=>{
+    const r=typeof req==='string'?{name:req}:req,group=groups.get(r.name)||[];
+    const matched=r.integrationId?group.find(c=>checkKey(c)===`${r.name}#${r.integrationId}`):group[0];
+    if(!matched)return{name:r.name,integrationId:r.integrationId||null,state:'missing'};
+    // GitHub may emit a commit status and an Actions check-run under the same
+    // required context. Its branch protection requires both to pass; taking
+    // the first green item would hide the other failing or pending check.
+    const failed=group.some(c=>!['success','pending'].includes(c.state));
+    const pending=group.some(c=>c.state==='pending');
+    return {...matched,state:failed?'failure':pending?'pending':'success'};
+  });
 }
 function evaluateApprovalRules(approvalState){if(!approvalState||!Array.isArray(approvalState.rules))return[];return approvalState.rules.filter(r=>Number(r.approvals_required||0)>0&&r.approved!==true).map(r=>({code:'approval_rule_pending',message:`GitLab approval rule pending: ${r.name||r.id||'unnamed'} (${Number(r.approved_by?.length||0)}/${Number(r.approvals_required||0)}).`}));}
 function fallbackMergeClassification(){return{status:'waiting',code:'merge_state_unknown',message:'Provider merge state could not be classified safely.'};}
