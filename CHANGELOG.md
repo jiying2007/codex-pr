@@ -4,7 +4,7 @@
 
 - Wait for completed GitLab fixture configuration, stable critical services and repeated authenticated readiness before provider acceptance tests.
 - Enforce actual CodeQL SARIF findings and refresh supported immutable security-action pins.
-- Repin to Codex Safe Core 4.18.4 because the shipped Core runtime digest changed to `f36b7c158ba188989f456d60c55c9974467d166e1b5bea52a0f7bbee4309c548`; publish a new immutable product release and required distribution evidence.
+- Repin to Codex Safe Core 4.18.5 because the shipped Core runtime digest changed to `affb2f6f680d8efcdf8ed6a3c5fbd7b009396883be543684f890a82488be2e6c`; publish a new immutable product release and required distribution evidence.
 - Refresh Product Contract v2 and generated/current-state Family identity for the exact Core pin.
 
 ## 5.4.15
