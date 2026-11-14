@@ -27,24 +27,180 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Start GitLab CE
         run: |
+          set -euo pipefail
+          fixture_nonce="$(node -e "process.stdout.write(require('node:crypto').randomBytes(16).toString('hex'))")"
+          fixture_marker_dir="/tmp/codex-safe-gitlab-init-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${{ matrix.gitlab }}-${fixture_nonce}"
+          printf 'GITLAB_INIT_MARKER_DIR=%s\nGITLAB_INIT_NONCE=%s\n' "$fixture_marker_dir" "$fixture_nonce" >> "$GITHUB_ENV"
+          # The official image invokes this hook after synchronous reconfigure and upgrade.
+          fixture_post_reconfigure="umask 077 && mkdir -m 700 '$fixture_marker_dir' && printf '%s' '$fixture_nonce' > '$fixture_marker_dir/complete'"
+          fixture_omnibus_config="external_url 'http://localhost'; gitlab_rails['initial_root_password']='g4TQ9zV2mL7xK5pR8wN3cY6fH4sJ9'; gitlab_rails['monitoring_whitelist']=['0.0.0.0/0']"
+          if [ '${{ matrix.gitlab }}' = '14.6.1-ce.0' ]; then
+            # Avoid the observed 14.6 runit logrotate/log startup timeout.
+            # Keep container logs; rotation is unnecessary for this CI fixture.
+            fixture_omnibus_config+="; logrotate['enable']=false"
+          fi
           docker run -d --name gitlab --shm-size=256m -p 127.0.0.1:8080:80 \
-            -e GITLAB_OMNIBUS_CONFIG="external_url 'http://localhost'; gitlab_rails['initial_root_password']='g4TQ9zV2mL7xK5pR8wN3cY6fH4sJ9'; gitlab_rails['monitoring_whitelist']=['0.0.0.0/0']" \
+            -e GITLAB_OMNIBUS_CONFIG="$fixture_omnibus_config" \
+            -e GITLAB_SKIP_RECONFIGURE=false \
+            -e GITLAB_POST_RECONFIGURE_SCRIPT="$fixture_post_reconfigure" \
             "gitlab/gitlab-ce:${{ matrix.gitlab }}"
       - name: Wait for GitLab
         run: |
           set -euo pipefail
+          require_running_container() {
+            fixture_state="$(docker inspect --format '{{.State.Status}}' gitlab 2>/dev/null || true)"
+            if [ "$fixture_state" != running ]; then
+              echo "GitLab fixture is not running: ${fixture_state:-unavailable}" >&2
+              exit 1
+            fi
+          }
+          initial_reconfigure_ready() {
+            docker exec gitlab sh -c '
+              marker="$1"; expected="$2"; directory="${marker%/*}"
+              [ -d "$directory" ] && [ ! -L "$directory" ] &&
+                [ -f "$marker" ] && [ ! -L "$marker" ] &&
+                [ "$(wc -c < "$marker")" -eq "${#expected}" ] &&
+                [ "$(cat "$marker")" = "$expected" ]
+            ' sh "$GITLAB_INIT_MARKER_DIR/complete" "$GITLAB_INIT_NONCE" >/dev/null 2>&1
+          }
           for i in $(seq 1 210); do
-            if curl -fsS http://127.0.0.1:8080/users/sign_in >/dev/null 2>&1 && curl -fsS http://127.0.0.1:8080/-/health | grep -qx 'GitLab OK' && docker exec gitlab gitlab-rails runner "raise unless User.find_by_username('root')" >/dev/null 2>&1; then break; fi
-            if [ "$i" = 210 ]; then docker logs gitlab; exit 1; fi
+            require_running_container
+            if initial_reconfigure_ready && curl -fsS http://127.0.0.1:8080/users/sign_in >/dev/null 2>&1 && curl -fsS http://127.0.0.1:8080/-/health | grep -qx 'GitLab OK' && docker exec gitlab gitlab-rails runner "raise unless User.find_by_username('root')" >/dev/null 2>&1; then break; fi
+            if [ "$i" = 210 ]; then echo 'GitLab provider dependencies did not become ready.' >&2; exit 1; fi
             sleep 5
           done
-      - name: Create deterministic API token
+          echo 'Initial GitLab reconfigure and upgrade completion marker verified.'
+
+          critical_pids() {
+            status="$(docker exec gitlab gitlab-ctl status 2>/dev/null || true)"
+            printf '%s\n' "$status" | awk '
+              $1 == "run:" && ($2 == "gitaly:" || $2 == "gitlab-workhorse:" || $2 == "puma:" || $2 == "sidekiq:") {
+                service=$2; pid=$4; gsub(/:/,"",service); gsub(/[()]/,"",pid); print service ":" pid
+              }' | sort
+          }
+          omnibus_stable=false
+          for i in $(seq 1 20); do
+            require_running_container
+            before="$(critical_pids)"
+            if [ "$(printf '%s\n' "$before" | sed '/^$/d' | wc -l)" -ne 4 ]; then
+              sleep 10
+              continue
+            fi
+            sleep 30
+            require_running_container
+            after="$(critical_pids)"
+            http_code="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/users/sign_in || true)"
+            if [ "$before" = "$after" ] && { [ "$http_code" = 200 ] || [ "$http_code" = 302 ]; }; then
+              omnibus_stable=true
+              echo 'Critical GitLab services remained PID-stable for 30 seconds after Rails readiness.'
+              break
+            fi
+            echo "GitLab Omnibus services still converging (attempt ${i}/20)."
+          done
+          if [ "$omnibus_stable" != true ]; then
+            echo 'GitLab Omnibus services did not converge to a stable provider-ready state.' >&2
+            exit 1
+          fi
+      - name: Create deterministic API token and verify stable authenticated API
         run: |
-          docker exec gitlab gitlab-rails runner "u=User.find_by_username('root'); u.personal_access_tokens.where(name:'change-safe-ci').delete_all; t=u.personal_access_tokens.create(scopes:['api'],name:'change-safe-ci',expires_at:1.day.from_now); t.set_token('token-string-here123'); t.save!"
+          set -euo pipefail
+          docker exec gitlab gitlab-rails runner "u=User.find_by_username('root'); raise 'root user missing' unless u; u.personal_access_tokens.where(name: 'change-safe-ci').delete_all; t=u.personal_access_tokens.new(scopes: ['api'], name: 'change-safe-ci', expires_at: 1.day.from_now); t.set_token('token-string-here123'); t.save!; persisted=PersonalAccessToken.find_by_token('token-string-here123'); raise 'deterministic token lookup failed after persistence' unless persisted && persisted.user_id == u.id"
+          stable=0
+          for i in $(seq 1 100); do
+            if curl -fsS --header 'PRIVATE-TOKEN: token-string-here123' http://127.0.0.1:8080/api/v4/user >/dev/null \
+              && curl -fsS --header 'PRIVATE-TOKEN: token-string-here123' 'http://127.0.0.1:8080/api/v4/projects?simple=true&per_page=1' >/dev/null; then
+              stable=$((stable + 1))
+              if [ "$stable" -ge 6 ]; then
+                echo 'Authenticated GitLab API stable for six consecutive probes.'
+                exit 0
+              fi
+            else
+              stable=0
+            fi
+            if [ "$i" = 100 ]; then
+              echo "Authenticated GitLab API did not remain stable; consecutive_successes=$stable"
+              exit 1
+            fi
+            sleep 3
+          done
       - name: Run provider contract
         env:
           GITLAB_BASE_URL: http://127.0.0.1:8080
           GITLAB_API_TOKEN: token-string-here123
         run: node scripts/gitlab-system-smoke.js
-      - if: failure()
-        run: docker logs --tail 500 gitlab
+      - name: GitLab diagnostics on failure
+        id: gitlab_diagnostics
+        if: failure()
+        env:
+          GITLAB_FIXTURE_VERSION: ${{ matrix.gitlab }}
+          GITLAB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const os = require('node:os');
+          const { spawnSync } = require('node:child_process');
+          const directory = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'gitlab-diagnostics-'));
+          const limit = 128 * 1024;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `directory=${directory}\n`);
+          function redact(value) {
+            return String(value || '')
+              .replaceAll('g4TQ9zV2mL7xK5pR8wN3cY6fH4sJ9', '[REDACTED]')
+              .replaceAll('token-string-here123', '[REDACTED]')
+              .replace(/-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?(?:-----END [^-]*PRIVATE KEY-----|$)/g, '[REDACTED PRIVATE KEY]')
+              .split('\n').map(line => /authorization|token|password|passwd|secret|credential|cookie|bearer|api[-_ ]?key|gl(?:pat|rt|oas|cbt|ptt|dt|agent|goat)-|gh[pousr]_|github_pat_|https?:\/\/[^\s/]+:[^\s/]+@/i.test(line)
+                ? '[REDACTED SENSITIVE LINE]' : line).join('\n');
+          }
+          function bounded(value) {
+            const bytes = Buffer.from(redact(value));
+            if (bytes.length <= limit) return bytes;
+            const prefix = bytes.subarray(0, limit).toString('utf8');
+            return Buffer.from(prefix.slice(0, prefix.lastIndexOf('\n') + 1));
+          }
+          const captures = [];
+          for (const [name, args] of [
+            ['container-state.json', ['inspect', '--format', '{{json .State}}', 'gitlab']],
+            ['service-status.log', ['exec', 'gitlab', 'gitlab-ctl', 'status']],
+            ['container.log', ['logs', '--timestamps', '--tail', '500', 'gitlab']],
+          ]) {
+            const result = spawnSync('docker', args, { encoding: 'utf8', timeout: 20000,
+              killSignal: 'SIGKILL', maxBuffer: limit });
+            let stdout = result.stdout || '';
+            let stderr = result.stderr || '';
+            if (result.error || result.signal || result.status !== 0) {
+              stdout = stdout.slice(0, stdout.lastIndexOf('\n') + 1);
+              stderr = stderr.slice(0, stderr.lastIndexOf('\n') + 1);
+            }
+            let output;
+            if (name === 'container-state.json') {
+              try {
+                const state = JSON.parse(stdout);
+                // Do not persist Config.Env, health command output, or the full inspect object.
+                const allowed = ['Status', 'Running', 'Paused', 'Restarting', 'OOMKilled', 'Dead',
+                  'Pid', 'ExitCode', 'Error', 'StartedAt', 'FinishedAt'];
+                output = JSON.stringify(Object.fromEntries(allowed.filter(key => key in state &&
+                  ['string', 'number', 'boolean'].includes(typeof state[key]))
+                  .map(key => [key, typeof state[key] === 'string' ? redact(state[key]).slice(0, 4096) : state[key]])), null, 2);
+              } catch { output = JSON.stringify({ unavailable: true }); }
+            } else output = stdout + (stderr ? '\n[stderr]\n' + stderr : '');
+            const content = bounded(output);
+            fs.writeFileSync(path.join(directory, name), content, { mode: 0o600, flag: 'wx' });
+            captures.push({ file: name, exitCode: result.status, signal: result.signal,
+              errorCode: result.error?.code || null, bytes: content.length });
+          }
+          fs.writeFileSync(path.join(directory, 'identity.json'), JSON.stringify({
+            runId: process.env.GITHUB_RUN_ID, runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            gitlabVersion: process.env.GITLAB_FIXTURE_VERSION, testedCommitSha: process.env.GITHUB_SHA,
+            pullRequestHeadSha: process.env.GITLAB_PR_HEAD_SHA || null,
+            capturedAt: new Date().toISOString(), captures,
+          }, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+          console.log('Preserved bounded, redacted GitLab fixture failure diagnostics.');
+          NODE
+      - name: Preserve GitLab failure diagnostics
+        if: ${{ failure() && steps.gitlab_diagnostics.outputs.directory != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gitlab-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.gitlab }}
+          path: ${{ steps.gitlab_diagnostics.outputs.directory }}
+          retention-days: 3
+          if-no-files-found: error
