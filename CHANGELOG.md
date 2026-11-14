@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.4.17
+
+- Restore delivery preflight for nonempty changes by consuming Git's native NUL terminator exactly once.
+- Preserve path bytes through bounded binary Git output; reject malformed UTF-8 and incomplete inventories while retaining valid whitespace, BOM, newline and backslash path identities.
+- Bind committed-policy fingerprints to the exact Git blob, preserve file contents and honor the Core policy read limit.
+- Add real Git repository regressions for ordinary changes, renames, special paths, unsupported byte names and exact policy digests.
+
 ## 5.4.16
 
 - Wait for completed GitLab fixture configuration, stable critical services and repeated authenticated readiness before provider acceptance tests.
