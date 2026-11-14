@@ -36,7 +36,7 @@ function mergePolicy(local,committed){
 }
 async function resolveEffectiveConfig(git,localConfig,targetRef){
   const result=await corePolicy.readPolicySectionAtHead({
-    git:async(args,_repoRoot,_token,options={})=>({stdout:await git.run(args,{allowFailure:false,signal:options.signal}),stderr:''}),
+    git:async(args,_repoRoot,_token,options={})=>({stdout:await git.run(args,{...options,allowFailure:false,trimEnd:false}),stderr:''}),
     repoRoot:git.cwd||'.',
     headOid:targetRef,
     section:'change'
