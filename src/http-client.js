@@ -30,7 +30,7 @@ class HttpClient{
    }
    await sleep(wait,signal);
    continue;
-  }throw error;throw last;}
+  }throw error;}throw last;}
  async paginate(pathname,query={},{maxPages=20,headers={},expected=[200],signal}={}){const items=[];let page=1;while(page<=maxPages){const r=await this.request('GET',pathname,{query:{...query,per_page:100,page},headers,expected,signal});if(!Array.isArray(r.data))throw Object.assign(new Error(`SCM pagination at ${pathname} did not return an array`),{code:'ESCMPAGINATION'});items.push(...r.data);const next=nextPage(r.headers,page);if(!next)return{items,complete:true};page=next;}return{items,complete:false};}
  async paginateCollection(pathname,key,query={},{maxPages=20,headers={},expected=[200],signal}={}){const items=[];let page=1;while(page<=maxPages){const r=await this.request('GET',pathname,{query:{...query,per_page:100,page},headers,expected,signal});const pageItems=r.data?.[key];if(!Array.isArray(pageItems))throw Object.assign(new Error(`SCM pagination at ${pathname} did not return collection ${key}`),{code:'ESCMPAGINATION'});items.push(...pageItems);const next=nextPage(r.headers,page);if(!next)return{items,complete:true};page=next;}return{items,complete:false};}
 }
