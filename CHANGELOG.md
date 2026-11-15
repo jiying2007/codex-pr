@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.4.18
+
+- Bound provider-directed SCM GET Retry-After waits to at most five seconds and the configured request timeout. Larger rate-limit delays are reported immediately as deferred rather than blocking the editor indefinitely or retrying the provider prematurely.
+- Honor caller cancellation during network failure retries and throttle backoff; an aborted operation never issues an additional request.
+- Preserve the existing secure redirect policy, byte-bounded responses, single-attempt mutations, Core 4.18.5 pin and zero default model calls. Cover long numeric/HTTP-date retry hints, bounded successful retries and cancellation with deterministic response fixtures.
+
 ## 5.4.17
 
 - Restore delivery preflight for nonempty changes by consuming Git's native NUL terminator exactly once.
