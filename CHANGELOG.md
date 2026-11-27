@@ -1,5 +1,10 @@
 # Changelog
 
+## 5.4.19
+
+- Repin to Codex Safe Core 4.18.13 because the shipped Core runtime digest changed to `997b7415d10df0c0b79b551fb41f91b46d5c24babcd9942a3f7208c947a998c6`; publish a new immutable product release and required distribution evidence.
+- Refresh Product Contract v2 and current Family identity for the exact Core pin, including release-integrity verification.
+
 ## 5.4.18
 
 - Bound provider-directed SCM GET Retry-After waits to at most five seconds and the configured request timeout. Larger rate-limit delays are reported immediately as deferred rather than blocking the editor indefinitely or retrying the provider prematurely.
