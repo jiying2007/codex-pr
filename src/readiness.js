@@ -36,7 +36,7 @@ async function evaluateReadiness({provider,change,requiredChecks=[],requiredAppr
   if(nativePolicy.status==='unknown')pending.push({code:'required_check_policy_unknown',message:'Could not verify provider merge policy; readiness remains non-authoritative.'});
   const effectiveApprovals=Math.max(Number(requiredApprovals||0),Number(nativePolicy.requiredApprovals||0));
   const [checks,approvals,approvalState,externalChecks]=await Promise.all([
-    provider.listChecks(fresh.provider==='gitlab'?fresh.number:(fresh.headSha||'')), provider.listApprovals(fresh.number),
+    (fresh.provider==='gitlab'?provider.listChecks(fresh.number,fresh.headSha):provider.listChecks(fresh.headSha)), provider.listApprovals(fresh.number),
     typeof provider.getApprovalState==='function'?provider.getApprovalState(fresh.number):null,
     typeof provider.listExternalStatusChecks==='function'?provider.listExternalStatusChecks(fresh.number):[]
   ]);

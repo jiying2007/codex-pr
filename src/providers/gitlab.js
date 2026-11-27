@@ -44,7 +44,52 @@ class GitLabProvider{
  async updateChangeRequest(iid,{title,body}){const payload={description:body};if(title!==undefined)payload.title=title;return(await this.client.request('PUT',this.path(`/merge_requests/${iid}`),{body:payload})).data;}
  async getChangeRequest(iid){return(await this.client.request('GET',this.path(`/merge_requests/${iid}`),{query:{include_diverged_commits_count:true}})).data;}
  async listPipelines(iid){const r=await this.client.paginate(this.path(`/merge_requests/${iid}/pipelines`));if(!r.complete)throw Object.assign(new Error('Could not exhaustively scan merge request pipelines.'),{code:'ESCMPAGINATION'});return r.items;}
- async listChecks(iid){const mr=await this.getChangeRequest(iid);let pipeline=mr?.head_pipeline||null;if(!pipeline)pipeline=(await this.listPipelines(iid))[0]||null;if(!pipeline?.id)return[];const probe=await this.client.request('GET',this.path(`/pipelines/${pipeline.id}/jobs`),{query:{per_page:100,page:1,include_retried:false},expected:[200,403,404]});if(probe.status===200){const paged=await this.client.paginate(this.path(`/pipelines/${pipeline.id}/jobs`),{include_retried:false});if(!paged.complete)throw Object.assign(new Error('Could not exhaustively scan pipeline jobs.'),{code:'ESCMPAGINATION'});if(paged.items.length)return paged.items.map(j=>({name:j.name,state:jobCheckState(j),url:j.web_url||'',pipelineId:pipeline.id,jobId:j.id,allowFailure:j.allow_failure===true}));}return[{name:`pipeline:${pipeline.id}`,state:checkState(pipeline.status),url:pipeline.web_url||'',pipelineId:pipeline.id}];}
+ async listChecks(iid,expectedHead){
+  const unbound=message=>Object.assign(new Error(message),{code:'EPIPELINEBOUND'});
+  const validOid=value=>typeof value==='string'&&/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value);
+  const mr=await this.getChangeRequest(iid);
+  const head=confirmedHeadOid(mr);
+  if(!validOid(expectedHead)||head!==expectedHead||String(mr.iid)!==String(iid))throw unbound('GitLab MR head changed or is unbound; refresh readiness.');
+  const pipeline=mr.head_pipeline;
+  if(!pipeline){
+   // Listing MR pipelines may include old successful revisions. Absence of
+   // the authoritative head_pipeline is not permission to select one.
+   const history=await this.listPipelines(iid);
+   if(history.length)throw unbound('GitLab MR has pipeline history but no authoritative head pipeline.');
+   return [];
+  }
+  const pipelineId=verifiedProjectId(pipeline.id),projectId=verifiedProjectId(pipeline.project_id);
+  const sourceId=verifiedProjectId(mr.source_project_id),targetId=verifiedProjectId(mr.target_project_id);
+  const [source,target]=await Promise.all([this.projectInfo(this.sourceRemote),this.projectInfo(this.targetRemote)]);
+  if(sourceId!==verifiedProjectId(source?.id)||targetId!==verifiedProjectId(target?.id)||(projectId!==sourceId&&projectId!==targetId))throw unbound('GitLab pipeline project is outside the confirmed MR topology.');
+  if(!validOid(pipeline.sha))throw unbound('GitLab head pipeline has no valid commit SHA.');
+  const pipelinePath='/projects/'+enc(projectId)+'/pipelines/'+pipelineId;
+  let targetHead='';
+  if(pipeline.sha===head){
+   if(pipeline.ref!==mr.source_branch&&pipeline.ref!=='refs/merge-requests/'+iid+'/head')throw unbound('GitLab source pipeline ref does not identify the confirmed MR.');
+  }else{
+   // A merged-results pipeline runs on a synthetic commit, not the source
+   // SHA. Only an exact two-parent merge of the current target and source
+   // can qualify. Merge trains with additional predecessors are not inferred.
+   if(pipeline.source!=='merge_request_event'||pipeline.ref!=='refs/merge-requests/'+iid+'/merge')throw unbound('GitLab head pipeline does not bind the current source SHA; synthetic pipeline identity is unproven.');
+   targetHead=await this.getTargetBranchSha(mr.target_branch);
+   if(!validOid(targetHead))throw unbound('GitLab current target HEAD is unknown.');
+   const commit=(await this.client.request('GET','/projects/'+enc(projectId)+'/repository/commits/'+enc(pipeline.sha))).data;
+   if(commit?.id!==pipeline.sha||!Array.isArray(commit.parent_ids)||commit.parent_ids.length!==2||commit.parent_ids[0]!==targetHead||commit.parent_ids[1]!==head)throw unbound('GitLab merged-results pipeline parents do not match current target and source.');
+  }
+  const probe=await this.client.request('GET',pipelinePath+'/jobs',{query:{per_page:100,page:1,include_retried:false},expected:[200,403,404]});
+  let checks=[];
+  if(probe.status===200){
+   const paged=await this.client.paginate(pipelinePath+'/jobs',{include_retried:false});
+   if(!paged.complete)throw Object.assign(new Error('Could not exhaustively scan pipeline jobs.'),{code:'ESCMPAGINATION'});
+   if(paged.items.length)checks=paged.items.map(j=>({name:j.name,state:jobCheckState(j),url:j.web_url||'',pipelineId,jobId:j.id,allowFailure:j.allow_failure===true}));
+  }
+  if(!checks.length)checks=[{name:'pipeline:'+pipelineId,state:checkState(pipeline.status),url:pipeline.web_url||'',pipelineId}];
+  const final=await this.getChangeRequest(iid),latest=final.head_pipeline;
+  if(confirmedHeadOid(final)!==head||String(final.iid)!==String(iid)||final.source_branch!==mr.source_branch||final.target_branch!==mr.target_branch||Number(final.source_project_id)!==sourceId||Number(final.target_project_id)!==targetId||Number(latest?.id)!==pipelineId||Number(latest?.project_id)!==projectId||latest?.sha!==pipeline.sha||latest?.ref!==pipeline.ref||latest?.status!==pipeline.status)throw unbound('GitLab MR or head pipeline changed during readiness checks.');
+  if(targetHead&&await this.getTargetBranchSha(mr.target_branch)!==targetHead)throw unbound('GitLab target moved during merged-results readiness checks.');
+  return checks;
+ }
  async listExternalStatusChecks(iid){const r=await this.client.request('GET',this.path(`/merge_requests/${iid}/status_checks`),{expected:[200,403,404]});if(r.status!==200||!Array.isArray(r.data))return[];return r.data.map(c=>({name:c.name||`external:${c.id}`,state:externalState(c.status),url:c.external_url||'',externalStatusCheckId:c.id}));}
  async listApprovals(iid){const r=await this.client.request('GET',this.path(`/merge_requests/${iid}/approvals`),{expected:[200,403,404]});return r.status===200?(r.data?.approved_by||[]).map(x=>x.user?.username).filter(Boolean):[];} async getApprovalState(iid){const r=await this.client.request('GET',this.path(`/merge_requests/${iid}/approval_state`),{expected:[200,403,404]});return r.status===200?r.data:null;}
  async getMergePolicySnapshot(){return{status:'available',requiredChecks:[],requiredApprovals:0,requireCodeOwners:false,requireThreadResolution:false,mergeQueue:false,allowedMergeMethods:[]};}

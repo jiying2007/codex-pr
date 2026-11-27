@@ -45,3 +45,10 @@ test('missing or moved head blocks readiness without querying unrelated checks',
   assert.equal(result.state,'BLOCKED');assert.equal(result.blockers[0].code,code);assert.equal(calls,0);
  }
 });
+
+test('GitLab readiness passes its confirmed HEAD to the provider and propagates unbound pipeline errors',async()=>{
+ let actual;
+ const p={getChangeRequest:async()=>({}),normalize:()=>({provider:'gitlab',number:1,headSha:'h',targetBranch:'main'}),listChecks:async(iid,head)=>{actual=[iid,head];throw Object.assign(new Error('unbound pipeline'),{code:'EPIPELINEBOUND'});},listApprovals:async()=>[]};
+ await assert.rejects(()=>evaluateReadiness({provider:p,change:change({provider:'gitlab'})}),{code:'EPIPELINEBOUND'});
+ assert.deepEqual(actual,[1,'h']);
+});
