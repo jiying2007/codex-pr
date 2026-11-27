@@ -7,3 +7,10 @@ test('preflight blocks dirty worktree and stale target',async()=>{const p=await 
 test('preflight treats remote aliases of the same repository/branch as source_is_target',async()=>{const git=fakeGit();git.remoteUrl=async()=> 'git@github.com:o/r.git';const p=await runPreflight({git,config:{...config,targetBranch:'feat/x'},provider:{kind:'github',hasToken:true,getSourceBranchSha:async()=> 'headsha',getTargetBranchSha:async()=> 'targetsha'}});assert.ok(p.blockers.some(x=>x.code==='source_is_target'));});
 test('missing token blocks writes without making noisy provider API calls',async()=>{let calls=0;const p=await runPreflight({git:fakeGit(),config,provider:{kind:'github',hasToken:false,tokenEnvName:'GITHUB_TOKEN',validateCompatibility:async()=>{calls++;},getSourceBranchSha:async()=>{calls++;},getTargetBranchSha:async()=>{calls++;}}});assert.equal(calls,0);assert.ok(p.blockers.some(x=>x.code==='scm_credentials_missing'));});
 test('plaintext HTTP API is explicitly visible in Delivery Preflight',async()=>{const p=await runPreflight({git:fakeGit(),config,provider:{kind:'gitlab',hasToken:true,client:{baseUrl:'http://192.168.10.20/api/v4'},getSourceBranchSha:async()=> 'headsha',getTargetBranchSha:async()=> 'targetsha'}});assert.equal(p.state,'READY_WITH_WARNINGS');assert.ok(p.warnings.some(x=>x.code==='scm_plaintext_http'));});
+
+test('missing remote source or target identity blocks even when known drift is advisory',async()=>{
+ for(const [head,target,code] of [['','targetsha','remote_head_unknown'],['headsha','','remote_target_unknown'],[null,undefined,'remote_head_unknown']]){
+  const p=await runPreflight({git:fakeGit(),config:{...config,requirePushedHead:false,requireFreshTarget:false},provider:{hasToken:true,getSourceBranchSha:async()=>head,getTargetBranchSha:async()=>target}});
+  assert.equal(p.state,'BLOCKED');assert.ok(p.blockers.some(b=>b.code===code));
+ }
+});

@@ -23,7 +23,11 @@ function evaluateApprovalRules(approvalState){if(!approvalState||!Array.isArray(
 function fallbackMergeClassification(){return{status:'waiting',code:'merge_state_unknown',message:'Provider merge state could not be classified safely.'};}
 async function evaluateReadiness({provider,change,requiredChecks=[],requiredApprovals=0}){
   const blockers=[],pending=[],passed=[]; const freshRaw=await provider.getChangeRequest(change.number); const fresh=provider.normalize(freshRaw);
-  if(change.headSha&&fresh.headSha&&change.headSha!==fresh.headSha)blockers.push({code:'change_head_moved',message:`PR/MR head moved from ${change.headSha} to ${fresh.headSha}; rerun Delivery Preflight.`});
+  if(!change.headSha||!fresh.headSha||change.headSha!==fresh.headSha){
+    blockers.push({code:!change.headSha||!fresh.headSha?'change_head_unknown':'change_head_moved',message:`PR/MR head identity is missing or changed (${change.headSha||'<unknown>'} → ${fresh.headSha||'<unknown>'}); rerun Delivery Preflight.`});
+    // Do not query checks or approvals for an unbound change request.
+    return{state:'BLOCKED',blockers,pending,passed,checks:[],observedChecks:[],externalChecks:[],requiredChecks:[],requiredCheckSource:'unknown',requiredApprovals:Number(requiredApprovals||0),approvals:[],approvalState:null,nativePolicy:{status:'unknown',requiredChecks:[]},change:fresh};
+  }
   let nativePolicy={status:'none',requiredChecks:[],requiredApprovals:0,requireCodeOwners:false,requireThreadResolution:false,mergeQueue:false,allowedMergeMethods:[]};
   if(typeof provider.getMergePolicySnapshot==='function')nativePolicy=await provider.getMergePolicySnapshot(fresh.targetBranch).catch(()=>({status:'unknown',requiredChecks:[]}));
   const configured=(requiredChecks||[]).map(x=>typeof x==='string'?{name:x}:x); const native=(nativePolicy.requiredChecks||[]).map(x=>typeof x==='string'?{name:x}:x);
