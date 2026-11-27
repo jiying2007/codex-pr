@@ -9,7 +9,7 @@ function assertConfirmedChange(before, after) {
   if (!before && !after) return;
   if (!before || !after) throw drift('PR/MR changed while awaiting confirmation; preview and confirm again.');
   for (const key of ['number','url','headSha','sourceBranch','targetBranch']) {
-    if (before[key] == null || after[key] == null || String(before[key]) !== String(after[key])) {
+    if (before[key] == null || after[key] == null || String(before[key]).trim() === '' || String(after[key]).trim() === '' || String(before[key]) !== String(after[key])) {
       throw drift(`Confirmed PR/MR ${key} changed; preview and confirm again.`);
     }
   }
@@ -17,7 +17,7 @@ function assertConfirmedChange(before, after) {
 function assertConfirmedPreflight(before, after) {
   if (!before || !after) throw drift('Delivery preflight disappeared during confirmation.');
   for (const key of ['sourceBranch','targetBranch','headSha','targetSha','mergeBase']) {
-    if (before[key] !== after[key]) throw drift(`Confirmed preflight ${key} changed; preview and confirm again.`);
+    if (!before[key] || !after[key] || before[key] !== after[key]) throw drift(`Confirmed preflight ${key} changed; preview and confirm again.`);
   }
   for (const remote of ['sourceRemote','targetRemote']) {
     for (const key of ['host','projectPath']) {

@@ -16,10 +16,10 @@ test('SCM verification transport failures never become zero approvals or absent 
    classifyMergeState:()=>({status:'ready',code:'ready',message:'ready'})
  });
  const p=base();p.getApprovalState=async()=>{throw new Error('approval API timed out');};
- await assert.rejects(()=>evaluateReadiness({provider:p,change:{provider:'gitlab',number:1}}),/approval API timed out/);
+ await assert.rejects(()=>evaluateReadiness({provider:p,change:{provider:'gitlab',number:1,headSha:'h'}}),/approval API timed out/);
  const q=base();q.listExternalStatusChecks=async()=>{throw new Error('external checks API timed out');};
- await assert.rejects(()=>evaluateReadiness({provider:q,change:{provider:'gitlab',number:1}}),/external checks API timed out/);
- assert.equal((await evaluateReadiness({provider:base(),change:{provider:'gitlab',number:1}})).state,'READY_TO_MERGE');
+ await assert.rejects(()=>evaluateReadiness({provider:q,change:{provider:'gitlab',number:1,headSha:'h'}}),/external checks API timed out/);
+ assert.equal((await evaluateReadiness({provider:base(),change:{provider:'gitlab',number:1,headSha:'h'}})).state,'READY_TO_MERGE');
 });
 
 test('same-name GitHub status and check-run must both be green before readiness can pass',()=>{
@@ -36,4 +36,12 @@ test('same-name GitHub status and check-run must both be green before readiness 
  assert.equal(evaluateChecks([status],[{name:'CI Gate',integrationId:15368}])[0].state,'missing');
  assert.equal(evaluateChecks([status,{...pending,state:'unknown'}],['CI Gate'])[0].state,'failure');
  assert.equal(evaluateChecks([],['CI Gate'])[0].state,'missing');
+});
+
+test('missing or moved head blocks readiness without querying unrelated checks',async()=>{
+ for(const [expected,actual,code] of [['h','','change_head_unknown'],['','h','change_head_unknown'],['h','other','change_head_moved']]){
+  let calls=0;const provider={getChangeRequest:async()=>({headSha:actual}),normalize:r=>({provider:'github',number:1,targetBranch:'main',...r}),listChecks:async()=>{calls++;return[];},listApprovals:async()=>{calls++;return[];}};
+  const result=await evaluateReadiness({provider,change:change({headSha:expected})});
+  assert.equal(result.state,'BLOCKED');assert.equal(result.blockers[0].code,code);assert.equal(calls,0);
+ }
 });

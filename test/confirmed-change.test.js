@@ -25,3 +25,10 @@ test('preflight changes after create/update approval require a fresh confirmatio
  assert.throws(()=>assertConfirmedPreflight(preflight,{...preflight,sourceRemote:{...preflight.sourceRemote,projectPath:'other/repo'}}),{code:'ECHANGEIDENTITY'});
  assert.throws(()=>assertConfirmedPreflight(preflight,{...preflight,targetRemote:{...preflight.targetRemote,host:'internal.example'}}),{code:'ECHANGEIDENTITY'});
 });
+
+test('two missing HEAD observations cannot constitute confirmation',()=>{
+ for(const headSha of ['',undefined,null]){
+  const unknown={...change,headSha};assert.throws(()=>assertConfirmedChange(unknown,unknown),{code:'ECHANGEIDENTITY'});
+  const unbound={...preflight,headSha};assert.throws(()=>assertConfirmedPreflight(unbound,unbound),{code:'ECHANGEIDENTITY'});
+ }
+});

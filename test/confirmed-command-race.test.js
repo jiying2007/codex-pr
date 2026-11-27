@@ -51,7 +51,7 @@ function harness(){
     './src/provider-discovery':{resolveProviderConfig:async(_remote,config)=>({config,kind:'github',discovery:{}}),probeProvider:async()=>({})},
     './src/codex-safe-core/display-time':{formatLogTimestamp:()=>''},
     './src/preflight':{scmFailure:error=>error},
-    './src/workflow':{prepareDelivery:async()=>({preflight:preflight(),receipt:{provenance:{}},reviewers:{users:['reviewer'],teams:[]}}),
+    './src/workflow':{normalizedFreshChange:async(p,c)=>p.normalize(c),prepareDelivery:async()=>({preflight:preflight(),receipt:{provenance:{}},reviewers:{users:['reviewer'],teams:[]}}),
       createOrUpdateDelivery:async()=>{mutationCalls.push(['create']);throw Error('Unexpected remote create or update');}},
     './src/readiness':{evaluateReadiness:async({change})=>({change,state:'READY',checks:[],observedChecks:[],approvals:[],requiredApprovals:0,nativePolicy:{status:'ok'},blockers:[],pending:[],externalChecks:[]})},
     './src/provenance':{collectProvenance:async()=>({})},

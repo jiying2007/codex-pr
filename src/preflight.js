@@ -78,6 +78,11 @@ async function runPreflight({ git, config, provider }) {
     } catch (error) { blockers.push(scmFailure(error, 'Remote branch snapshot')); }
   }
 
+  // Missing identity is never a policy relaxation. A known mismatch may be
+  // advisory for preview, but an unknown remote branch must block delivery.
+  if (!headSha) blockers.push(finding('local_head_unknown', 'Local HEAD could not be determined.'));
+  if (provider.hasToken !== false && sourceBranch && !remoteHeadSha) blockers.push(finding('remote_head_unknown', 'Remote source branch HEAD could not be verified.'));
+  if (provider.hasToken !== false && targetBranch && !remoteTargetSha) blockers.push(finding('remote_target_unknown', 'Remote target branch HEAD could not be verified.'));
   if (config.requirePushedHead !== false && remoteHeadSha && remoteHeadSha !== headSha) blockers.push(finding('head_not_pushed', `Remote ${sourceRemoteName}/${sourceBranch} does not match local HEAD.`, { local: headSha, remote: remoteHeadSha }));
   else if (remoteHeadSha && remoteHeadSha !== headSha) warnings.push(finding('head_not_pushed_allowed', 'Remote source branch differs from local HEAD.'));
   if (config.requireFreshTarget !== false && remoteTargetSha && localTargetSha && remoteTargetSha !== localTargetSha) blockers.push(finding('target_ref_stale', `Local ${targetRef} is stale relative to the server.`, { local: localTargetSha, remote: remoteTargetSha }));
