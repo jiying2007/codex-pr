@@ -40,3 +40,15 @@ test('GitHub truncated check-run inventory fails closed',async()=>{
  p.client.paginateCollection=async()=>({items:[],complete:false});
  await assert.rejects(()=>p.listChecks('a'.repeat(40)),/exhaustively/);
 });
+
+test('GitHub PR discovery verifies the exact head and base repositories and branch names',async()=>{
+ const p=new GitHubProvider({remote:{owner:'org',projectPath:'org/r',host:'github.com'},sourceRemote:{owner:'me',projectPath:'me/r',host:'github.com'},apiBaseUrl:'https://api.github.com',token:'fixture',timeoutMs:1000});
+ const exact={number:3,head:{ref:'feat',repo:{full_name:'Me/R'}},base:{ref:'main',repo:{full_name:'org/r'}}};
+ let rows=[{...exact,number:1,head:{...exact.head,repo:{full_name:'me/other'}}},exact];
+ p.client.paginate=async()=>({complete:true,items:rows});
+ assert.equal((await p.findOpenChangeRequest('feat','main')).number,3);
+ rows=[{...exact,head:{...exact.head,repo:{full_name:'me/other'}}}];assert.equal(await p.findOpenChangeRequest('feat','main'),null);
+ rows=[{...exact,head:{ref:'feat',repo:null}}];await assert.rejects(()=>p.findOpenChangeRequest('feat','main'),{code:'ECHANGEIDENTITY'});
+ rows=[exact,{...exact,number:4}];await assert.rejects(()=>p.findOpenChangeRequest('feat','main'),{code:'ECHANGEIDENTITY'});
+ rows=[{...exact,base:{...exact.base,ref:'other'}}];await assert.rejects(()=>p.findOpenChangeRequest('feat','main'),{code:'ECHANGEIDENTITY'});
+});

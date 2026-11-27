@@ -15,7 +15,24 @@ class GitHubProvider{
   async getTargetBranchSha(branch){const r=await this.client.request('GET',this.path(`/branches/${encodeURIComponent(branch)}`),{headers:this.apiHeaders});return r.data?.commit?.sha||'';}
   getBranchSha(branch){return this.getTargetBranchSha(branch);}
   crossRepository(){return this.sourceRemote.projectPath.toLowerCase()!==this.targetRemote.projectPath.toLowerCase();}
-  async findOpenChangeRequest(sourceBranch,targetBranch){const head=`${this.sourceRemote.owner}:${sourceBranch}`;const result=await this.client.paginate(this.path('/pulls'),{state:'open',head,base:targetBranch},{headers:this.apiHeaders});if(!result.complete)throw Object.assign(new Error('Could not exhaustively scan open pull requests.'),{code:'ESCMPAGINATION'});return result.items[0]||null;}
+  async findOpenChangeRequest(sourceBranch,targetBranch){
+    const head=`${this.sourceRemote.owner}:${sourceBranch}`;
+    const result=await this.client.paginate(this.path('/pulls'),{state:'open',head,base:targetBranch},{headers:this.apiHeaders});
+    if(!result.complete)throw Object.assign(new Error('Could not exhaustively scan open pull requests.'),{code:'ESCMPAGINATION'});
+    const source=String(this.sourceRemote.projectPath||'').toLowerCase(),target=String(this.targetRemote.projectPath||'').toLowerCase();
+    const fail=message=>Object.assign(new Error(message),{code:'ECHANGEIDENTITY'});
+    if(!source||!target)throw fail('GitHub repository identity is unavailable.');
+    const matches=[];
+    for(const item of result.items){
+      const from=item?.head?.repo?.full_name,to=item?.base?.repo?.full_name;
+      if(typeof from!=='string'||!from||typeof to!=='string'||!to)throw fail('GitHub returned a pull request without repository identity.');
+      if(from.toLowerCase()!==source||to.toLowerCase()!==target)continue;
+      if(item.head.ref!==sourceBranch||item.base.ref!==targetBranch)throw fail('GitHub returned inconsistent pull request branch identity.');
+      matches.push(item);
+    }
+    if(matches.length>1)throw fail('Multiple open pull requests match the confirmed source and target; select the request explicitly.');
+    return matches[0]||null;
+  }
   async createChangeRequest({sourceBranch,targetBranch,title,body,draft}){const cross=this.crossRepository();const payload={head:cross?`${this.sourceRemote.owner}:${sourceBranch}`:sourceBranch,base:targetBranch,title,body,draft:Boolean(draft)};if(cross)payload.head_repo=this.sourceRemote.projectPath;return(await this.client.request('POST',this.path('/pulls'),{body:payload,expected:[201],headers:this.apiHeaders})).data;}
   async updateChangeRequest(number,{title,body}){const payload={body};if(title!==undefined)payload.title=title;return(await this.client.request('PATCH',this.path(`/pulls/${number}`),{body:payload,headers:this.apiHeaders})).data;}
   async getChangeRequest(number){return(await this.client.request('GET',this.path(`/pulls/${number}`),{headers:this.apiHeaders})).data;}
