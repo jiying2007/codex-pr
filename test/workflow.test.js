@@ -24,17 +24,19 @@ test('missing head on a summary is accepted only after a successful identity rea
  assert.throws(()=>assertExpectedChangeHead('abc',unknown,'check'),{code:'ESTALE'});
 });
 
-function deliveryFixture({existing=null,writeResult,readResult,sourceSha='a'.repeat(40),targetSha='b'.repeat(40)}={}){
+function deliveryFixture({existing=null,writeResult,readResult,sourceSha='a'.repeat(40),targetSha='b'.repeat(40),targetShaAfterWrite,targetShaAfterLabels,targetReadError}={}){
  const head='a'.repeat(40),target='b'.repeat(40),url='https://github.com/o/r/pull/1',calls=[];
+ let remoteTargetSha=targetSha,targetReadCount=0;
  const git={currentBranch:async()=> 'feat',revParse:async ref=>ref==='HEAD'?head:target,remoteUrl:async()=> 'https://github.com/o/r.git',trackingRef:(r,b)=>r+'/'+b,mergeBase:async()=> 'c'.repeat(40),commits:async()=>[{sha:head,subject:'fix: test'}],changedFiles:async()=>[{status:'M',path:'src/a.js'}],statusPorcelain:async()=>'',upstream:async()=> 'origin/feat',showFile:async()=>''};
  const normal={number:1,id:1,provider:'github',headSha:head,sourceBranch:'feat',targetBranch:'main',body:'',url};
- const provider={kind:'github',hasToken:true,normalize:x=>x,getSourceBranchSha:async()=>sourceSha,getTargetBranchSha:async()=>targetSha,findOpenChangeRequest:async()=>existing,
- createChangeRequest:async()=>{calls.push('create');return writeResult===undefined?normal:writeResult;},
- updateChangeRequest:async()=>{calls.push('update');return writeResult===undefined?normal:writeResult;},
+ const afterWrite=()=>{if(targetShaAfterWrite!==undefined)remoteTargetSha=targetShaAfterWrite;};
+ const provider={kind:'github',hasToken:true,normalize:x=>x,getSourceBranchSha:async()=>sourceSha,getTargetBranchSha:async()=>{targetReadCount++;if(targetReadError&&targetReadCount>1)throw targetReadError;return remoteTargetSha;},findOpenChangeRequest:async()=>existing,
+ createChangeRequest:async()=>{calls.push('create');afterWrite();return writeResult===undefined?normal:writeResult;},
+ updateChangeRequest:async()=>{calls.push('update');afterWrite();return writeResult===undefined?normal:writeResult;},
  getChangeRequest:async()=>{calls.push('read');if(readResult instanceof Error)throw readResult;return readResult===undefined?normal:readResult;},
- addLabels:async()=>{calls.push('labels');}};
+ addLabels:async()=>{calls.push('labels');if(targetShaAfterLabels!==undefined)remoteTargetSha=targetShaAfterLabels;}};
  const config={sourceRemote:'origin',targetRemote:'origin',targetBranch:'main',requirePushedHead:false,requireFreshTarget:false,managedSections:false,labels:['test']};
- return{git,provider,config,calls,head,target,normal};
+ return{git,provider,config,calls,head,target,normal,targetReads:()=>targetReadCount,setRemoteTargetSha:value=>{remoteTargetSha=value;}};
 }
 test('create/update rejects a known source mismatch before any provider write even with advisory preview policy',async()=>{
  const {createOrUpdateDelivery}=require('../src/workflow');
@@ -71,4 +73,40 @@ test('matching identity permits create and final readback; failed readback repor
  const fail=deliveryFixture({readResult:new Error('readback timeout')});
  await assert.rejects(()=>createOrUpdateDelivery(fail),error=>error.code==='ESTALEAFTERMUTATION'&&error.remoteMutationPossible);
  assert.deepEqual(fail.calls,['create','labels','read']);
+});
+
+test('target branch movement during the remote write is detected before labels',async()=>{
+ const {createOrUpdateDelivery}=require('../src/workflow');
+ const fixture=deliveryFixture({targetShaAfterWrite:'d'.repeat(40)});
+ await assert.rejects(()=>createOrUpdateDelivery({...fixture,expectedChange:null,expectedTargetSha:fixture.target}),error=>
+  error.code==='ESTALEAFTERMUTATION'&&error.remoteMutationPossible===true&&
+  error.expectedTargetSha===fixture.target&&error.actualTargetSha==='d'.repeat(40));
+ assert.deepEqual(fixture.calls,['create']);
+ assert.equal(fixture.targetReads(),2);
+});
+
+test('missing target branch readback after a remote write fails closed',async()=>{
+ const {createOrUpdateDelivery}=require('../src/workflow');
+ const fixture=deliveryFixture({targetShaAfterWrite:''});
+ await assert.rejects(()=>createOrUpdateDelivery({...fixture,expectedChange:null}),error=>
+  error.code==='ESTALEAFTERMUTATION'&&error.remoteMutationPossible===true&&error.actualTargetSha==='');
+ assert.deepEqual(fixture.calls,['create']);
+});
+
+test('target branch movement after labels is caught by the final readback',async()=>{
+ const {createOrUpdateDelivery}=require('../src/workflow');
+ const fixture=deliveryFixture({targetShaAfterLabels:'e'.repeat(40)});
+ await assert.rejects(()=>createOrUpdateDelivery({...fixture,expectedChange:null}),error=>
+  error.code==='ESTALEAFTERMUTATION'&&error.remoteMutationPossible===true&&error.actualTargetSha==='e'.repeat(40));
+ assert.deepEqual(fixture.calls,['create','labels','read']);
+ assert.equal(fixture.targetReads(),3);
+});
+
+test('target branch read failure after a remote write is reported as uncertain',async()=>{
+ const {createOrUpdateDelivery}=require('../src/workflow');
+ const cause=new Error('target ref read timed out');
+ const fixture=deliveryFixture({targetReadError:cause});
+ await assert.rejects(()=>createOrUpdateDelivery({...fixture,expectedChange:null}),error=>
+  error.code==='ESTALEAFTERMUTATION'&&error.remoteMutationPossible===true&&error.cause===cause);
+ assert.deepEqual(fixture.calls,['create']);
 });
