@@ -110,3 +110,19 @@ test('target branch read failure after a remote write is reported as uncertain',
   error.code==='ESTALEAFTERMUTATION'&&error.remoteMutationPossible===true&&error.cause===cause);
  assert.deepEqual(fixture.calls,['create']);
 });
+
+test('stale target SHA after confirmation blocks create before provider mutation',async()=>{
+ const {createOrUpdateDelivery}=require('../src/workflow');
+ const fixture=deliveryFixture();
+ await assert.rejects(()=>createOrUpdateDelivery({...fixture,expectedChange:null,expectedTargetSha:'f'.repeat(40)}),{code:'ESTALE'});
+ assert.deepEqual(fixture.calls,[]);
+});
+
+test('target branch movement during an existing change request update is detected',async()=>{
+ const {createOrUpdateDelivery}=require('../src/workflow');
+ const fixture=deliveryFixture({existing:deliveryFixture().normal,targetShaAfterWrite:'d'.repeat(40)});
+ await assert.rejects(()=>createOrUpdateDelivery({...fixture,expectedChange:fixture.normal}),error=>
+  error.code==='ESTALEAFTERMUTATION'&&error.remoteMutationPossible===true&&
+  error.expectedTargetSha===fixture.target&&error.actualTargetSha==='d'.repeat(40));
+ assert.deepEqual(fixture.calls,['update']);
+});
