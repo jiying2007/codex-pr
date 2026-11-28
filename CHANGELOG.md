@@ -1,5 +1,12 @@
 # Changelog
 
+## 5.4.20
+
+- Fail closed on missing or changed source/target HEAD, request identity, and uncertain write readback.
+- Bind native GitLab merge actions to a validated head OID and validate exact fork/project identity.
+- Reject stale or unbound GitLab pipelines; use the real pipeline project, and accept synthetic merged-results evidence only with exact current target/source parents. Unproven merge train evidence stays non-authoritative.
+- Preserve existing zero-model delivery and Core 4.18.13 contract. No new merge authority.
+
 ## 5.4.19
 
 - Repin to Codex Safe Core 4.18.13 because the shipped Core runtime digest changed to `997b7415d10df0c0b79b551fb41f91b46d5c24babcd9942a3f7208c947a998c6`; publish a new immutable product release and required distribution evidence.
