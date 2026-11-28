@@ -56,3 +56,55 @@ test('GitLab MR discovery requires both exact project identities and does not si
  await assert.rejects(()=>p.createChangeRequest({sourceBranch:'feat',targetBranch:'main',title:'t',body:'b'}),{code:'ECHANGEIDENTITY'});
  assert.equal(writes,0);
 });
+
+function pipelineFixture(overrides={}){
+ const head='a'.repeat(40),target='b'.repeat(40),merge='c'.repeat(40),old='d'.repeat(40);
+ const remote={host:'gitlab.local',projectPath:'org/r'},sourceRemote={host:'gitlab.local',projectPath:'fork/r'};
+ const p=new GitLabProvider({remote,sourceRemote,apiBaseUrl:'https://gitlab.local/api/v4',token:'fixture',timeoutMs:1000});
+ const mr={iid:5,sha:head,source_project_id:2,target_project_id:3,source_branch:'feat',target_branch:'main',head_pipeline:{id:10,project_id:2,sha:head,ref:'feat',status:'success'},...overrides};
+ const calls=[];
+ p.projectInfo=async r=>({id:r.projectPath==='fork/r'?2:3});
+ p.getChangeRequest=async()=>structuredClone(mr);
+ p.getTargetBranchSha=async()=>target;
+ p.listPipelines=async()=>[{id:9,sha:old,status:'success'}];
+ p.client.request=async(method,path)=>{calls.push(path);return path.includes('/repository/commits/')?{data:{id:merge,parent_ids:[target,head]}}:{status:200};};
+ p.client.paginate=async path=>{calls.push(path);return{complete:true,items:[{id:7,name:'build',status:'success'}]};};
+ return {p,mr,head,target,merge,old,calls};
+}
+test('GitLab pipeline checks use the bound current pipeline project rather than the MR target project',async()=>{
+ const {p,head,calls}=pipelineFixture();
+ const checks=await p.listChecks(5,head);
+ assert.equal(checks[0].state,'success');
+ assert.deepEqual(calls,['/projects/2/pipelines/10/jobs','/projects/2/pipelines/10/jobs']);
+});
+test('stale, missing, unbound or foreign head pipelines cannot contribute green jobs',async()=>{
+ for(const kind of ['old','missing','foreign','ref','no-sha','wrong-head']){
+  const f=pipelineFixture();
+  if(kind==='old')f.mr.head_pipeline.sha=f.old;
+  if(kind==='missing')f.mr.head_pipeline=null;
+  if(kind==='foreign')f.mr.head_pipeline.project_id=8;
+  if(kind==='ref')f.mr.head_pipeline.ref='other';
+  if(kind==='no-sha')f.mr.head_pipeline.sha='';
+  await assert.rejects(()=>f.p.listChecks(5,kind==='wrong-head'?f.old:f.head),{code:'EPIPELINEBOUND'});
+  assert.equal(f.calls.length,0);
+ }
+ const f=pipelineFixture({head_pipeline:null});f.p.listPipelines=async()=>[];
+ assert.deepEqual(await f.p.listChecks(5,f.head),[]);
+});
+test('merged-results checks require both current target and source parents; merge trains are not guessed',async()=>{
+ const f=pipelineFixture();
+ f.mr.head_pipeline={id:10,project_id:3,sha:f.merge,ref:'refs/merge-requests/5/merge',source:'merge_request_event',status:'success'};
+ assert.equal((await f.p.listChecks(5,f.head))[0].state,'success');
+ const bad=pipelineFixture({head_pipeline:f.mr.head_pipeline});
+ bad.p.client.request=async()=>({data:{id:bad.merge,parent_ids:[bad.old,bad.head]}});
+ await assert.rejects(()=>bad.p.listChecks(5,bad.head),{code:'EPIPELINEBOUND'});
+ const train=pipelineFixture({head_pipeline:{...f.mr.head_pipeline,ref:'refs/merge-requests/5/train'}});
+ await assert.rejects(()=>train.p.listChecks(5,train.head),{code:'EPIPELINEBOUND'});
+ assert.equal(train.calls.length,0);
+});
+test('a pipeline replacement during job enumeration invalidates observed checks',async()=>{
+ const f=pipelineFixture();
+ let reads=0;
+ f.p.getChangeRequest=async()=>{const raw=structuredClone(f.mr);if(++reads>1)raw.head_pipeline.id=11;return raw;};
+ await assert.rejects(()=>f.p.listChecks(5,f.head),{code:'EPIPELINEBOUND'});
+});
