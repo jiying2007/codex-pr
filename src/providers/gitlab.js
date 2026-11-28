@@ -50,18 +50,23 @@ class GitLabProvider{
   const mr=await this.getChangeRequest(iid);
   const head=confirmedHeadOid(mr);
   if(!validOid(expectedHead)||head!==expectedHead||String(mr.iid)!==String(iid))throw unbound('GitLab MR head changed or is unbound; refresh readiness.');
+  const sourceId=verifiedProjectId(mr.source_project_id),targetId=verifiedProjectId(mr.target_project_id);
+  const [source,target]=await Promise.all([this.projectInfo(this.sourceRemote),this.projectInfo(this.targetRemote)]);
+  if(sourceId!==verifiedProjectId(source?.id)||targetId!==verifiedProjectId(target?.id))throw unbound('GitLab MR project identity is outside the confirmed topology.');
+  if(typeof mr.source_branch!=='string'||!mr.source_branch||typeof mr.target_branch!=='string'||!mr.target_branch)throw unbound('GitLab MR branch identity is unavailable.');
+  const sameMr=final=>confirmedHeadOid(final)===head&&String(final.iid)===String(iid)&&final.source_branch===mr.source_branch&&final.target_branch===mr.target_branch&&Number(final.source_project_id)===sourceId&&Number(final.target_project_id)===targetId;
   const pipeline=mr.head_pipeline;
   if(!pipeline){
-   // Listing MR pipelines may include old successful revisions. Absence of
-   // the authoritative head_pipeline is not permission to select one.
+   // Empty history is not stable evidence if a pipeline is attached, or the
+   // MR identity changes, while the history request is in flight.
    const history=await this.listPipelines(iid);
    if(history.length)throw unbound('GitLab MR has pipeline history but no authoritative head pipeline.');
+   const final=await this.getChangeRequest(iid);
+   if(!sameMr(final)||final.head_pipeline)throw unbound('GitLab MR or head pipeline changed while checking for absent pipelines.');
    return [];
   }
   const pipelineId=verifiedProjectId(pipeline.id),projectId=verifiedProjectId(pipeline.project_id);
-  const sourceId=verifiedProjectId(mr.source_project_id),targetId=verifiedProjectId(mr.target_project_id);
-  const [source,target]=await Promise.all([this.projectInfo(this.sourceRemote),this.projectInfo(this.targetRemote)]);
-  if(sourceId!==verifiedProjectId(source?.id)||targetId!==verifiedProjectId(target?.id)||(projectId!==sourceId&&projectId!==targetId))throw unbound('GitLab pipeline project is outside the confirmed MR topology.');
+  if(projectId!==sourceId&&projectId!==targetId)throw unbound('GitLab pipeline project is outside the confirmed MR topology.');
   if(!validOid(pipeline.sha))throw unbound('GitLab head pipeline has no valid commit SHA.');
   const pipelinePath='/projects/'+enc(projectId)+'/pipelines/'+pipelineId;
   let targetHead='';
@@ -86,7 +91,7 @@ class GitLabProvider{
   }
   if(!checks.length)checks=[{name:'pipeline:'+pipelineId,state:checkState(pipeline.status),url:pipeline.web_url||'',pipelineId}];
   const final=await this.getChangeRequest(iid),latest=final.head_pipeline;
-  if(confirmedHeadOid(final)!==head||String(final.iid)!==String(iid)||final.source_branch!==mr.source_branch||final.target_branch!==mr.target_branch||Number(final.source_project_id)!==sourceId||Number(final.target_project_id)!==targetId||Number(latest?.id)!==pipelineId||Number(latest?.project_id)!==projectId||latest?.sha!==pipeline.sha||latest?.ref!==pipeline.ref||latest?.status!==pipeline.status)throw unbound('GitLab MR or head pipeline changed during readiness checks.');
+  if(!sameMr(final)||Number(latest?.id)!==pipelineId||Number(latest?.project_id)!==projectId||latest?.sha!==pipeline.sha||latest?.ref!==pipeline.ref||latest?.status!==pipeline.status||latest?.source!==pipeline.source)throw unbound('GitLab MR or head pipeline changed during readiness checks.');
   if(targetHead&&await this.getTargetBranchSha(mr.target_branch)!==targetHead)throw unbound('GitLab target moved during merged-results readiness checks.');
   return checks;
  }
