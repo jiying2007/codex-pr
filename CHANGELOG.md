@@ -1,5 +1,9 @@
 # Changelog
 
+## 5.4.21
+
+- Adopt exact immutable Core 4.18.15 (runtime digest `9331f48aa1e943293a5d89371df68bb3d688937cf62c5b90442bdca5c128e39d`), synchronizing shared workflow pins and policy schema URL with the product contract. This release aligns the active Family runtime without changing Change's zero-model default, authorization or provider behavior.
+
 ## 5.4.20
 
 - Fail closed on missing or changed source/target HEAD, request identity, and uncertain write readback.
