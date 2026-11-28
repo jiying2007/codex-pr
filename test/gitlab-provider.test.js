@@ -108,3 +108,49 @@ test('a pipeline replacement during job enumeration invalidates observed checks'
  f.p.getChangeRequest=async()=>{const raw=structuredClone(f.mr);if(++reads>1)raw.head_pipeline.id=11;return raw;};
  await assert.rejects(()=>f.p.listChecks(5,f.head),{code:'EPIPELINEBOUND'});
 });
+
+test('absence of an authoritative GitLab pipeline is rechecked after empty history',async()=>{
+ const stable=pipelineFixture({head_pipeline:null});let reads=0;
+ stable.p.getChangeRequest=async()=>{reads++;return structuredClone(stable.mr);};
+ stable.p.listPipelines=async()=>[];
+ assert.deepEqual(await stable.p.listChecks(5,stable.head),[]);
+ assert.equal(reads,2);
+ for(const kind of ['pipeline-attached','head-moved','source-branch','target-branch','source-project','target-project','iid']){
+  const f=pipelineFixture({head_pipeline:null});let calls=0,history=0;
+  f.p.listPipelines=async()=>{history++;return [];};
+  f.p.getChangeRequest=async()=>{
+   const raw=structuredClone(f.mr);
+   if(++calls===2){
+    if(kind==='pipeline-attached')raw.head_pipeline={id:11,project_id:2,sha:f.head,ref:'feat',status:'running'};
+    if(kind==='head-moved')raw.sha=f.old;
+    if(kind==='source-branch')raw.source_branch='other';
+    if(kind==='target-branch')raw.target_branch='other';
+    if(kind==='source-project')raw.source_project_id=8;
+    if(kind==='target-project')raw.target_project_id=8;
+    if(kind==='iid')raw.iid=6;
+   }
+   return raw;
+  };
+  await assert.rejects(f.p.listChecks(5,f.head),{code:'EPIPELINEBOUND'},kind);
+  assert.equal(history,1);assert.equal(calls,2);assert.equal(f.calls.length,0);
+ }
+});
+test('empty history cannot qualify an MR with a foreign project or missing branch identity',async()=>{
+ for(const overrides of [{source_project_id:99},{target_project_id:99},{source_branch:''},{target_branch:''}]){
+  const f=pipelineFixture({head_pipeline:null,...overrides});let history=0;
+  f.p.listPipelines=async()=>{history++;return [];};
+  await assert.rejects(f.p.listChecks(5,f.head),{code:'EPIPELINEBOUND'});
+  assert.equal(history,0);
+ }
+});
+test('GitLab merged-results pipeline source is bound across the final readback',async()=>{
+ const f=pipelineFixture();
+ f.mr.head_pipeline={id:10,project_id:3,sha:f.merge,ref:'refs/merge-requests/5/merge',source:'merge_request_event',status:'success'};
+ let reads=0;
+ f.p.getChangeRequest=async()=>{
+  const raw=structuredClone(f.mr);
+  if(++reads===2)raw.head_pipeline.source='push';
+  return raw;
+ };
+ await assert.rejects(f.p.listChecks(5,f.head),{code:'EPIPELINEBOUND'});
+});
